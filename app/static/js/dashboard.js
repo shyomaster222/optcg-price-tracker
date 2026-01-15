@@ -131,37 +131,46 @@ async function loadTablePrices() {
         productIds.add(cell.dataset.product);
     });
 
-    // Fetch prices for each product
-    for (const productId of productIds) {
-        try {
-            const response = await fetch(`/api/products/${productId}/latest`);
-            const data = await response.json();
+    // Fetch all prices in parallel
+    const fetchPromises = Array.from(productIds).map(productId =>
+        fetch(`/api/products/${productId}/latest`)
+            .then(response => response.json())
+            .then(data => ({ productId, data }))
+            .catch(error => {
+                console.error(`Error loading prices for product ${productId}:`, error);
+                return null;
+            })
+    );
 
-            // Update cells for this product
-            const cells = document.querySelectorAll(`.price-cell[data-product="${productId}"]`);
-            cells.forEach(cell => {
-                const retailerId = parseInt(cell.dataset.retailer);
-                const price = data.prices.find(p => p.retailer_id === retailerId);
+    const results = await Promise.all(fetchPromises);
 
-                if (price) {
-                    // All prices now in USD
-                    cell.innerHTML = '$' + price.price.toFixed(2);
-                    if (!price.in_stock) {
-                        cell.classList.add('text-muted');
-                        cell.innerHTML += ' <small>(OOS)</small>';
-                    }
-                } else {
-                    cell.innerHTML = '<span class="text-muted">-</span>';
+    // Update all cells at once
+    results.forEach(result => {
+        if (!result) return;
+
+        const { productId, data } = result;
+
+        // Update cells for this product
+        const cells = document.querySelectorAll(`.price-cell[data-product="${productId}"]`);
+        cells.forEach(cell => {
+            const retailerId = parseInt(cell.dataset.retailer);
+            const price = data.prices.find(p => p.retailer_id === retailerId);
+
+            if (price) {
+                // All prices now in USD
+                cell.innerHTML = '$' + price.price.toFixed(2);
+                if (!price.in_stock) {
+                    cell.classList.add('text-muted');
+                    cell.innerHTML += ' <small>(OOS)</small>';
                 }
-            });
+            } else {
+                cell.innerHTML = '<span class="text-muted">-</span>';
+            }
+        });
 
-            // Update best price
-            updateBestPrice(productId, data.prices);
-
-        } catch (error) {
-            console.error(`Error loading prices for product ${productId}:`, error);
-        }
-    }
+        // Update best price
+        updateBestPrice(productId, data.prices);
+    });
 }
 
 function updateBestPrice(productId, prices) {
