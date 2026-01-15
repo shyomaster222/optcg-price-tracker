@@ -78,3 +78,24 @@ def list_products():
         })
 
     return jsonify(result)
+
+
+@api_bp.route('/scrape', methods=['POST'])
+def trigger_scrape():
+    """Trigger a manual scrape job"""
+    from app.scrapers.scraper_manager import ScraperManager
+
+    retailer_slug = request.args.get('retailer')
+
+    try:
+        manager = ScraperManager()
+        manager.run_scrape_job(retailer_slug)
+        return jsonify({
+            'status': 'success',
+            'message': f'Scrape completed for {"all retailers" if not retailer_slug else retailer_slug}'
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
