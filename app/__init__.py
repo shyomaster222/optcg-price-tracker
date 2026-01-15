@@ -28,6 +28,10 @@ def create_app(config_name=None):
         db.create_all()
         _seed_if_empty()
 
+    # Initialize scheduler for automated price scraping (daily at midnight UTC)
+    from app.tasks.scheduler import init_scheduler
+    init_scheduler(app)
+
     return app
 
 
