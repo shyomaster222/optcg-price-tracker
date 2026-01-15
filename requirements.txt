@@ -12,9 +12,9 @@ psycopg2-binary==2.9.9
 gunicorn==21.2.0
 
 # Web Scraping
-playwright==1.40.0
 beautifulsoup4==4.12.2
 requests==2.31.0
+lxml==5.1.0
 
 # Data Processing
 python-dotenv==1.0.0

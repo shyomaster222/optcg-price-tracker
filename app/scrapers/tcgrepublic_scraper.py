@@ -1,6 +1,7 @@
 from typing import Optional, Dict, Any
 import re
 import logging
+from bs4 import BeautifulSoup
 
 from app.scrapers.base_scraper import BaseScraper
 
@@ -37,18 +38,17 @@ class TCGRepublicScraper(BaseScraper):
         query = "+".join(query_parts)
         return self.SEARCH_URL_TEMPLATE.format(query=query)
 
-    def parse_price(self, page, product) -> Optional[Dict[str, Any]]:
+    def parse_price(self, soup: BeautifulSoup, product) -> Optional[Dict[str, Any]]:
         """Parse price from TCGRepublic"""
         try:
-            page.wait_for_selector(self.selectors['product_card'], timeout=10000)
-            products = page.query_selector_all(self.selectors['product_card'])
+            products = soup.select('.product_unit')
 
             for prod_elem in products[:10]:
-                title_elem = prod_elem.query_selector(self.selectors['product_title'])
+                title_elem = prod_elem.select_one('.product_name a')
                 if not title_elem:
                     continue
 
-                title = title_elem.text_content().upper()
+                title = title_elem.get_text().upper()
 
                 # Match set code
                 if product.set_code.upper() not in title:
@@ -61,9 +61,9 @@ class TCGRepublicScraper(BaseScraper):
                     continue
 
                 # Extract price (TCGRepublic shows USD)
-                price_elem = prod_elem.query_selector(self.selectors['price'])
+                price_elem = prod_elem.select_one('.figure')
                 if price_elem:
-                    price_text = price_elem.text_content()
+                    price_text = price_elem.get_text()
                     price_match = re.search(r'[\d,]+\.?\d*', price_text)
                     if price_match:
                         price = float(price_match.group().replace(',', ''))
@@ -78,7 +78,7 @@ class TCGRepublicScraper(BaseScraper):
             logger.error(f"Error parsing TCGRepublic price: {e}")
             return None
 
-    def parse_stock_status(self, page) -> bool:
+    def parse_stock_status(self, soup: BeautifulSoup) -> bool:
         """Check stock status on TCGRepublic"""
-        add_to_cart = page.query_selector(self.selectors['add_to_cart'])
+        add_to_cart = soup.select_one('.add_to_cart_button')
         return add_to_cart is not None

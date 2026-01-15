@@ -1,6 +1,7 @@
 from typing import Optional, Dict, Any
 import re
 import logging
+from bs4 import BeautifulSoup
 
 from app.scrapers.base_scraper import BaseScraper
 
@@ -38,18 +39,17 @@ class AmazonJPScraper(BaseScraper):
         query = "+".join(query_parts)
         return self.SEARCH_URL_TEMPLATE.format(query=query)
 
-    def parse_price(self, page, product) -> Optional[Dict[str, Any]]:
+    def parse_price(self, soup: BeautifulSoup, product) -> Optional[Dict[str, Any]]:
         """Parse price from Amazon Japan search results"""
         try:
-            page.wait_for_selector(self.selectors['search_result'], timeout=10000)
-            results = page.query_selector_all(self.selectors['search_result'])
+            results = soup.select('[data-component-type="s-search-result"]')
 
             for result in results[:5]:
-                title_elem = result.query_selector(self.selectors['product_title'])
+                title_elem = result.select_one('h2 a span')
                 if not title_elem:
                     continue
 
-                title = title_elem.text_content().lower()
+                title = title_elem.get_text().lower()
 
                 # Verify this is the correct product
                 if product.set_code.lower() not in title:
@@ -65,9 +65,9 @@ class AmazonJPScraper(BaseScraper):
                     continue
 
                 # Extract price
-                price_elem = result.query_selector(self.selectors['price_whole'])
+                price_elem = result.select_one('.a-price-whole')
                 if price_elem:
-                    price_text = price_elem.text_content()
+                    price_text = price_elem.get_text()
                     price = int(re.sub(r'[^\d]', '', price_text))
 
                     return {
@@ -81,11 +81,11 @@ class AmazonJPScraper(BaseScraper):
             logger.error(f"Error parsing Amazon JP price: {e}")
             return None
 
-    def parse_stock_status(self, page) -> bool:
+    def parse_stock_status(self, soup: BeautifulSoup) -> bool:
         """Check if product is in stock"""
-        out_of_stock_elem = page.query_selector(self.selectors['out_of_stock'])
+        out_of_stock_elem = soup.select_one('.a-color-price')
         if out_of_stock_elem:
-            text = out_of_stock_elem.text_content().lower()
+            text = out_of_stock_elem.get_text().lower()
             if '在庫切れ' in text or 'out of stock' in text:
                 return False
         return True

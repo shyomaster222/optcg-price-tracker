@@ -3,6 +3,8 @@ from typing import Optional, List, Dict, Any
 import random
 import time
 import logging
+import requests
+from bs4 import BeautifulSoup
 
 from app.utils.rate_limiter import RateLimiter
 
@@ -18,7 +20,7 @@ USER_AGENTS = [
 
 
 class BaseScraper(ABC):
-    """Abstract base class for all retailer scrapers"""
+    """Abstract base class for all retailer scrapers using requests"""
 
     def __init__(self, retailer_config: Dict[str, Any]):
         self.retailer_name = retailer_config.get('name')
@@ -32,18 +34,20 @@ class BaseScraper(ABC):
             requests_per_minute=retailer_config.get('requests_per_minute', 10)
         )
 
+        self.session = requests.Session()
+
     @abstractmethod
     def build_search_url(self, product) -> str:
         """Build the search URL for a specific product"""
         pass
 
     @abstractmethod
-    def parse_price(self, page, product) -> Optional[Dict[str, Any]]:
+    def parse_price(self, soup: BeautifulSoup, product) -> Optional[Dict[str, Any]]:
         """Parse price information from the page"""
         pass
 
     @abstractmethod
-    def parse_stock_status(self, page) -> bool:
+    def parse_stock_status(self, soup: BeautifulSoup) -> bool:
         """Parse stock availability from the page"""
         pass
 
@@ -57,45 +61,56 @@ class BaseScraper(ABC):
         """Get a random user agent string"""
         return random.choice(USER_AGENTS)
 
+    def get_headers(self) -> Dict[str, str]:
+        """Get request headers"""
+        return {
+            'User-Agent': self.get_random_user_agent(),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
+
+    def fetch_page(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch and parse a page using requests"""
+        try:
+            response = self.session.get(
+                url,
+                headers=self.get_headers(),
+                timeout=30
+            )
+            response.raise_for_status()
+            return BeautifulSoup(response.text, 'html.parser')
+        except requests.RequestException as e:
+            logger.error(f"Request failed for {url}: {e}")
+            return None
+
     def scrape_product(self, product) -> Optional[Dict[str, Any]]:
-        """Scrape price for a single product using Playwright"""
+        """Scrape price for a single product using requests"""
         self.rate_limiter.wait()
 
         try:
-            from playwright.sync_api import sync_playwright
-        except ImportError:
-            logger.error("Playwright not installed. Run: pip install playwright && playwright install")
-            return None
+            url = self.build_search_url(product)
+            logger.info(f"Scraping {self.retailer_name}: {url}")
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent=self.get_random_user_agent(),
-                locale='ja-JP',
-                timezone_id='Asia/Tokyo'
-            )
-            page = context.new_page()
-
-            try:
-                url = self.build_search_url(product)
-                logger.info(f"Scraping {self.retailer_name}: {url}")
-
-                page.goto(url, wait_until='networkidle', timeout=30000)
-                time.sleep(self.get_random_delay())
-
-                price_data = self.parse_price(page, product)
-
-                if price_data:
-                    price_data['source_url'] = url
-                    price_data['in_stock'] = self.parse_stock_status(page)
-
-                return price_data
-
-            except Exception as e:
-                logger.error(f"Error scraping {self.retailer_name}: {e}")
+            soup = self.fetch_page(url)
+            if not soup:
                 return None
-            finally:
-                browser.close()
+
+            time.sleep(self.get_random_delay())
+
+            price_data = self.parse_price(soup, product)
+
+            if price_data:
+                price_data['source_url'] = url
+                price_data['in_stock'] = self.parse_stock_status(soup)
+
+            return price_data
+
+        except Exception as e:
+            logger.error(f"Error scraping {self.retailer_name}: {e}")
+            return None
 
     def scrape_all_products(self, products: List) -> List[Dict[str, Any]]:
         """Scrape prices for all products"""

@@ -1,6 +1,7 @@
 from typing import Optional, Dict, Any
 import re
 import logging
+from bs4 import BeautifulSoup
 
 from app.scrapers.base_scraper import BaseScraper
 
@@ -46,20 +47,19 @@ class EbayScraper(BaseScraper):
         query = "+".join(query_parts)
         return self.SEARCH_URL_TEMPLATE.format(query=query)
 
-    def parse_price(self, page, product) -> Optional[Dict[str, Any]]:
+    def parse_price(self, soup: BeautifulSoup, product) -> Optional[Dict[str, Any]]:
         """Parse lowest price from eBay listings"""
         try:
-            page.wait_for_selector(self.selectors['listing'], timeout=10000)
-            listings = page.query_selector_all(self.selectors['listing'])
+            listings = soup.select('.s-item')
 
             valid_prices = []
 
             for listing in listings[1:11]:  # Skip first (ad), check next 10
-                title_elem = listing.query_selector(self.selectors['title'])
+                title_elem = listing.select_one('.s-item__title')
                 if not title_elem:
                     continue
 
-                title = title_elem.text_content().upper()
+                title = title_elem.get_text().upper()
 
                 # Verify product match
                 if product.set_code.upper() not in title:
@@ -70,9 +70,9 @@ class EbayScraper(BaseScraper):
                     continue
 
                 # Extract price
-                price_elem = listing.query_selector(self.selectors['price'])
+                price_elem = listing.select_one('.s-item__price')
                 if price_elem:
-                    price_text = price_elem.text_content()
+                    price_text = price_elem.get_text()
                     price_match = re.search(r'\$([\d,]+\.?\d*)', price_text)
                     if price_match:
                         price = float(price_match.group(1).replace(',', ''))
@@ -93,6 +93,6 @@ class EbayScraper(BaseScraper):
             logger.error(f"Error parsing eBay price: {e}")
             return None
 
-    def parse_stock_status(self, page) -> bool:
+    def parse_stock_status(self, soup: BeautifulSoup) -> bool:
         """eBay listings are always in stock if visible"""
         return True
