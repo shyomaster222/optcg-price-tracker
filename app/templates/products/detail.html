@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product.display_name }} - OPTCG Price Tracker{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('main.product_list') }}">Products</a></li>
+                <li class="breadcrumb-item active">{{ product.set_code }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>{{ product.set_code }} - {{ product.set_name }}</h1>
+        <p class="lead">
+            <span class="badge bg-{{ 'primary' if product.product_type == 'box' else 'secondary' }} me-2">
+                {{ product.product_type|title }}
+            </span>
+            {% if product.release_date %}
+            <span class="text-muted">Released: {{ product.release_date.strftime('%B %d, %Y') }}</span>
+            {% endif %}
+        </p>
+    </div>
+    <div class="col-md-4">
+        {% if best_price %}
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h5 class="card-title">Best Price</h5>
+                <p class="display-5">
+                    {% if best_price.currency == 'JPY' %}
+                    &#165;{{ best_price.price|int }}
+                    {% else %}
+                    ${{ "%.2f"|format(best_price.price) }}
+                    {% endif %}
+                </p>
+                <p class="mb-0">{{ best_price.retailer }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Current Prices Table -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Current Prices</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Retailer</th>
+                                <th>Price</th>
+                                <th>Status</th>
+                                <th>Last Updated</th>
+                                <th>Link</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for price in latest_prices %}
+                            <tr>
+                                <td>{{ price.retailer }}</td>
+                                <td class="fw-bold">
+                                    {% if price.currency == 'JPY' %}
+                                    &#165;{{ price.price|int }}
+                                    {% else %}
+                                    ${{ "%.2f"|format(price.price) }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if price.in_stock %}
+                                    <span class="badge bg-success">In Stock</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Out of Stock</span>
+                                    {% endif %}
+                                </td>
+                                <td><small class="text-muted">{{ price.scraped_at[:16] }}</small></td>
+                                <td>
+                                    {% if price.source_url %}
+                                    <a href="{{ price.source_url }}" target="_blank" class="btn btn-sm btn-outline-primary">View</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">No price data available yet</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Price History</h5>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary active" data-days="30">30 Days</button>
+                    <button type="button" class="btn btn-outline-secondary" data-days="60">60 Days</button>
+                    <button type="button" class="btn btn-outline-secondary" data-days="90">90 Days</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="priceHistoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Retailer Comparison</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="comparisonChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let priceHistoryChart = null;
+let comparisonChart = null;
+const productId = {{ product.id }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadCharts(30);
+
+    // Day range buttons
+    document.querySelectorAll('[data-days]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('[data-days]').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            loadCharts(parseInt(this.dataset.days));
+        });
+    });
+});
+
+async function loadCharts(days) {
+    // Price History Chart
+    const historyResponse = await fetch(`/api/prices/${productId}?days=${days}`);
+    const historyData = await historyResponse.json();
+
+    const historyCtx = document.getElementById('priceHistoryChart').getContext('2d');
+
+    if (priceHistoryChart) {
+        priceHistoryChart.destroy();
+    }
+
+    priceHistoryChart = new Chart(historyCtx, {
+        type: 'line',
+        data: historyData,
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: 'day' },
+                    title: { display: true, text: 'Date' }
+                },
+                y: {
+                    title: { display: true, text: 'Price' },
+                    beginAtZero: false
+                }
+            },
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: { mode: 'index', intersect: false }
+            }
+        }
+    });
+
+    // Comparison Chart
+    const compareResponse = await fetch(`/api/prices/compare?product_id=${productId}`);
+    const compareData = await compareResponse.json();
+
+    const compareCtx = document.getElementById('comparisonChart').getContext('2d');
+
+    if (comparisonChart) {
+        comparisonChart.destroy();
+    }
+
+    comparisonChart = new Chart(compareCtx, {
+        type: 'bar',
+        data: compareData,
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: { display: true, text: 'Price' }
+                }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+}
+</script>
+{% endblock %}

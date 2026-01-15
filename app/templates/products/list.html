@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Products - OPTCG Price Tracker{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1>All Products</h1>
+        <p class="text-muted">Browse all tracked One Piece TCG Japanese sealed products</p>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-auto">
+        <div class="btn-group" role="group">
+            <a href="{{ url_for('main.product_list') }}" class="btn btn-outline-secondary {% if not request.args.get('type') %}active{% endif %}">All</a>
+            <a href="{{ url_for('main.product_list', type='box') }}" class="btn btn-outline-secondary {% if request.args.get('type') == 'box' %}active{% endif %}">Boxes</a>
+            <a href="{{ url_for('main.product_list', type='case') }}" class="btn btn-outline-secondary {% if request.args.get('type') == 'case' %}active{% endif %}">Cases</a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    {% for product in products %}
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">{{ product.set_code }}</h5>
+                <h6 class="card-subtitle mb-2 text-muted">{{ product.set_name }}</h6>
+                <p class="card-text">
+                    <span class="badge bg-{{ 'primary' if product.product_type == 'box' else 'secondary' }}">
+                        {{ product.product_type|title }}
+                    </span>
+                    {% if product.release_date %}
+                    <br><small class="text-muted">Released: {{ product.release_date.strftime('%Y-%m-%d') }}</small>
+                    {% endif %}
+                </p>
+                <div class="best-price-display" data-product="{{ product.id }}">
+                    <small class="text-muted">Loading prices...</small>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('main.product_detail', product_id=product.id) }}" class="btn btn-primary btn-sm">View Details</a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="alert alert-info">
+            No products found. Run the seed script to populate products.
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const displays = document.querySelectorAll('.best-price-display');
+
+    for (const display of displays) {
+        const productId = display.dataset.product;
+        try {
+            const response = await fetch(`/api/products/${productId}/latest`);
+            const data = await response.json();
+
+            if (data.prices && data.prices.length > 0) {
+                // Find best price
+                const inStock = data.prices.filter(p => p.in_stock);
+                const best = (inStock.length > 0 ? inStock : data.prices)
+                    .reduce((a, b) => a.price < b.price ? a : b);
+
+                display.innerHTML = `
+                    <strong class="text-success">Best: ${formatPrice(best.price, best.currency)}</strong>
+                    <br><small class="text-muted">from ${best.retailer}</small>
+                `;
+            } else {
+                display.innerHTML = '<small class="text-muted">No price data</small>';
+            }
+        } catch (e) {
+            display.innerHTML = '<small class="text-muted">Error loading</small>';
+        }
+    }
+});
+
+function formatPrice(price, currency) {
+    if (currency === 'JPY') {
+        return '\u00A5' + price.toLocaleString();
+    } else if (currency === 'USD') {
+        return '$' + price.toFixed(2);
+    }
+    return price.toString();
+}
+</script>
+{% endblock %}

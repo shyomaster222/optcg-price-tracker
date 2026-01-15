@@ -1,0 +1,92 @@
+/* OPTCG Price Tracker Styles */
+
+body {
+    background-color: #f8f9fa;
+}
+
+.navbar-brand {
+    font-weight: bold;
+}
+
+/* Cards */
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border: none;
+}
+
+.card-header {
+    background-color: #fff;
+    border-bottom: 1px solid #e9ecef;
+}
+
+/* Tables */
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+}
+
+.price-cell {
+    min-width: 100px;
+}
+
+/* Best price highlight */
+.table-success {
+    background-color: rgba(25, 135, 84, 0.1) !important;
+}
+
+/* Charts */
+canvas {
+    max-height: 300px;
+}
+
+/* Product cards */
+.product-card {
+    transition: transform 0.2s;
+}
+
+.product-card:hover {
+    transform: translateY(-2px);
+}
+
+/* Badge styling */
+.badge {
+    font-weight: 500;
+}
+
+/* Footer */
+.footer {
+    border-top: 1px solid #e9ecef;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .display-4 {
+        font-size: 2rem;
+    }
+
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+}
+
+/* Loading state */
+.loading {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Stock status colors */
+.in-stock {
+    color: #198754;
+}
+
+.out-of-stock {
+    color: #dc3545;
+}
+
+/* Price display */
+.price-display {
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 1.1em;
+}
