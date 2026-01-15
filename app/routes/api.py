@@ -107,3 +107,38 @@ def trigger_scrape():
         'status': 'started',
         'message': f'Scrape job started for {"all retailers" if not retailer_slug else retailer_slug}. Check back in a few minutes for results.'
     })
+
+
+@api_bp.route('/prices/upload', methods=['POST'])
+def upload_prices():
+    """Upload price data (for syncing from local scrapes)"""
+    from datetime import datetime
+    from app.extensions import db
+    from app.models.price import PriceHistory
+    from app.models.product import Product
+    from app.models.retailer import Retailer
+
+    data = request.get_json()
+    if not data or 'prices' not in data:
+        return jsonify({'error': 'Missing prices data'}), 400
+
+    added = 0
+    for item in data['prices']:
+        product = Product.query.filter_by(set_code=item['set_code'], product_type=item['product_type']).first()
+        retailer = Retailer.query.filter_by(slug=item['retailer_slug']).first()
+
+        if product and retailer:
+            price_history = PriceHistory(
+                product_id=product.id,
+                retailer_id=retailer.id,
+                price=item['price'],
+                currency=item.get('currency', 'JPY'),
+                in_stock=item.get('in_stock', True),
+                source_url=item.get('source_url'),
+                scraped_at=datetime.utcnow()
+            )
+            db.session.add(price_history)
+            added += 1
+
+    db.session.commit()
+    return jsonify({'status': 'success', 'prices_added': added})
