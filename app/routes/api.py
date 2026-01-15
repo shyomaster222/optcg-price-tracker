@@ -82,20 +82,28 @@ def list_products():
 
 @api_bp.route('/scrape', methods=['POST'])
 def trigger_scrape():
-    """Trigger a manual scrape job"""
+    """Trigger a manual scrape job (runs in background thread)"""
+    import threading
+    from flask import current_app
     from app.scrapers.scraper_manager import ScraperManager
 
     retailer_slug = request.args.get('retailer')
 
-    try:
-        manager = ScraperManager()
-        manager.run_scrape_job(retailer_slug)
-        return jsonify({
-            'status': 'success',
-            'message': f'Scrape completed for {"all retailers" if not retailer_slug else retailer_slug}'
-        })
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+    def run_scrape(app, slug):
+        with app.app_context():
+            try:
+                manager = ScraperManager()
+                manager.run_scrape_job(slug)
+            except Exception as e:
+                print(f"Scrape error: {e}")
+
+    # Run scrape in background thread
+    app = current_app._get_current_object()
+    thread = threading.Thread(target=run_scrape, args=(app, retailer_slug))
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({
+        'status': 'started',
+        'message': f'Scrape job started for {"all retailers" if not retailer_slug else retailer_slug}. Check back in a few minutes for results.'
+    })
