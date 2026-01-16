@@ -6,6 +6,8 @@ from app.scrapers.base_scraper import BaseScraper
 from app.scrapers.amazon_jp_scraper import AmazonJPScraper
 from app.scrapers.tcgrepublic_scraper import TCGRepublicScraper
 from app.scrapers.ebay_scraper import EbayScraper
+from app.scrapers.pricecharting_scraper import PriceChartingScraper
+from app.scrapers.japantcg_scraper import JapanTCGScraper
 from app.models.retailer import Retailer
 from app.models.product import Product
 from app.models.price import PriceHistory
@@ -22,6 +24,8 @@ class ScraperManager:
         'amazon-jp': AmazonJPScraper,
         'tcgrepublic': TCGRepublicScraper,
         'ebay': EbayScraper,
+        'pricecharting': PriceChartingScraper,
+        'japantcg': JapanTCGScraper,
     }
 
     def __init__(self):

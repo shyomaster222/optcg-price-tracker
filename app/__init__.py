@@ -52,6 +52,8 @@ def _seed_if_empty():
         {"name": "Amazon Japan", "slug": "amazon-jp", "base_url": "https://www.amazon.co.jp", "country": "JP", "currency": "JPY", "min_delay_seconds": 3, "max_delay_seconds": 6, "requests_per_minute": 8},
         {"name": "TCGRepublic", "slug": "tcgrepublic", "base_url": "https://tcgrepublic.com", "country": "JP", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
         {"name": "eBay", "slug": "ebay", "base_url": "https://www.ebay.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 15},
+        {"name": "PriceCharting", "slug": "pricecharting", "base_url": "https://www.pricecharting.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 10},
+        {"name": "Japan TCG Store", "slug": "japantcg", "base_url": "https://japantradingcardstore.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
     ]
 
     for r in retailers_data:
