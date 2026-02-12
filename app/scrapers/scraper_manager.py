@@ -8,6 +8,10 @@ from app.scrapers.tcgrepublic_scraper import TCGRepublicScraper
 from app.scrapers.ebay_scraper import EbayScraper
 from app.scrapers.pricecharting_scraper import PriceChartingScraper
 from app.scrapers.japantcg_scraper import JapanTCGScraper
+from app.scrapers.tcghobby_scraper import TCGHobbyScraper
+from app.scrapers.fptradingcards_scraper import FPTradingCardsScraper
+from app.scrapers.pvpshoppe_scraper import PVPShoppeScraper
+from app.scrapers.ahiddenfortress_scraper import AHiddenFortressScraper
 from app.models.retailer import Retailer
 from app.models.product import Product
 from app.models.price import PriceHistory
@@ -26,6 +30,10 @@ class ScraperManager:
         'ebay': EbayScraper,
         'pricecharting': PriceChartingScraper,
         'japantcg': JapanTCGScraper,
+        'tcghobby': TCGHobbyScraper,
+        'fptradingcards': FPTradingCardsScraper,
+        'pvpshoppe': PVPShoppeScraper,
+        'ahiddenfortress': AHiddenFortressScraper,
     }
 
     def __init__(self):
@@ -50,9 +58,14 @@ class ScraperManager:
                 }
                 self.scrapers[retailer.slug] = scraper_class(config)
 
-    def run_scrape_job(self, retailer_slug: str = None):
+    def run_scrape_job(self, retailer_slug: str = None, product_limit: int = None, product_type: str = None):
         """Run scraping job for one or all retailers"""
-        products = Product.query.filter_by(is_active=True).all()
+        query = Product.query.filter_by(is_active=True)
+        if product_type:
+            query = query.filter_by(product_type=product_type)
+        products = query.all()
+        if product_limit:
+            products = products[:product_limit]
 
         retailers_to_scrape = [retailer_slug] if retailer_slug else list(self.scrapers.keys())
 

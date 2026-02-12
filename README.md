@@ -7,7 +7,7 @@ A web application to track and compare prices for Japanese One Piece TCG sealed 
 - Track prices from Amazon Japan, TCGRepublic, eBay, and more
 - Price history charts with 30/60/90 day views
 - Compare prices across retailers
-- Automated scraping every 6 hours
+- Automated scraping every 24 hours (configurable)
 - Best price highlighting
 - Stock availability tracking
 
@@ -63,6 +63,14 @@ flask run
 ```
 
 Visit `http://localhost:5000` in your browser.
+
+## Deploy to Production
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for:
+
+- **Railway** (recommended) – deploy and run daily scrapes via cron
+- **Render** and other hosts
+- How to set up 24-hour automatic price updates
 
 ## Manual Scraping
 

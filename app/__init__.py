@@ -28,9 +28,10 @@ def create_app(config_name=None):
         db.create_all()
         _seed_if_empty()
 
-    # Initialize scheduler for automated price scraping (daily at midnight UTC)
-    from app.tasks.scheduler import init_scheduler
-    init_scheduler(app)
+    # Initialize in-process scheduler only when not using external cron (e.g. Railway Cron)
+    if os.environ.get('ENABLE_IN_PROCESS_SCHEDULER', 'true').lower() == 'true':
+        from app.tasks.scheduler import init_scheduler
+        init_scheduler(app)
 
     return app
 
@@ -54,6 +55,10 @@ def _seed_if_empty():
         {"name": "eBay", "slug": "ebay", "base_url": "https://www.ebay.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 15},
         {"name": "PriceCharting", "slug": "pricecharting", "base_url": "https://www.pricecharting.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 10},
         {"name": "Japan TCG Store", "slug": "japantcg", "base_url": "https://japantradingcardstore.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
+        {"name": "TCG Hobby", "slug": "tcghobby", "base_url": "https://tcghobby.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
+        {"name": "FP Trading Cards", "slug": "fptradingcards", "base_url": "https://www.fptradingcards.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
+        {"name": "PVP Shoppe", "slug": "pvpshoppe", "base_url": "https://pvpshoppe.com", "country": "CA", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
+        {"name": "A Hidden Fortress", "slug": "ahiddenfortress", "base_url": "https://www.ahiddenfortress.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
     ]
 
     for r in retailers_data:
