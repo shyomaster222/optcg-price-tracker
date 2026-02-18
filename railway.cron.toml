@@ -1,0 +1,11 @@
+# Config for price-scraper cron service only.
+# Set "Config file path" to /railway.cron.toml in Railway dashboard for this service.
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python scripts/run_scraper.py"
+cronSchedule = "0 0 * * *"
+healthcheckPath = null
+restartPolicyType = "NEVER"
