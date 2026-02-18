@@ -7,5 +7,5 @@ builder = "nixpacks"
 [deploy]
 startCommand = "python scripts/run_scraper.py"
 cronSchedule = "0 0 * * *"
-healthcheckPath = null
+# No healthcheckPath - cron service doesn't serve HTTP
 restartPolicyType = "NEVER"
