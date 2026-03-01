@@ -14,6 +14,7 @@ class FPTradingCardsScraper(BaseScraper):
     SHOP_URL = "https://www.fptradingcards.com/shop/"
 
     SET_PATTERNS = {
+        # OP sets OP-01 through OP-14
         'OP-01': r'OP-?01|romance\s*dawn',
         'OP-02': r'OP-?02|paramount\s*war',
         'OP-03': r'OP-?03|pillars\s*of\s*strength',
@@ -22,7 +23,19 @@ class FPTradingCardsScraper(BaseScraper):
         'OP-06': r'OP-?06|wings\s*of\s*the\s*captain',
         'OP-07': r'OP-?07|500\s*years',
         'OP-08': r'OP-?08|two\s*legends',
+        'OP-09': r'OP-?09|emperors\s*in\s*the\s*new\s*world',
+        'OP-10': r'OP-?10|royal\s*blood',
+        'OP-11': r'OP-?11|fist\s*of\s*divine',
+        'OP-12': r'OP-?12|legacy\s*of\s*the\s*master',
+        'OP-13': r'OP-?13|carrying\s*on\s*his\s*will',
+        'OP-14': r'OP-?14|azure\s*sea',
+        # EB sets EB-01 through EB-03
         'EB-01': r'EB-?01|memorial',
+        'EB-02': r'EB-?02|anime\s*25th',
+        'EB-03': r'EB-?03|heroines',
+        # PRB sets PRB-01 and PRB-02
+        'PRB-01': r'PRB-?01|the\s*best(?!\s*vol)',
+        'PRB-02': r'PRB-?02|the\s*best\s*vol\.?\s*2',
     }
 
     def __init__(self, retailer_config: Dict[str, Any]):

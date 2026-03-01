@@ -4,6 +4,7 @@ import logging
 from bs4 import BeautifulSoup
 
 from app.scrapers.base_scraper import BaseScraper
+from app.utils.currency import convert_to_usd  # live currency conversion
 
 logger = logging.getLogger(__name__)
 
@@ -14,20 +15,17 @@ class PVPShoppeScraper(BaseScraper):
     COLLECTION_URL = "https://pvpshoppe.com/collections/one-piece-sealed-product-1"
 
     SET_PATTERNS = {
-        'OP-06': r'OP-?06|wings\s*of\s*the\s*captain',
-        'OP-08': r'OP-?08|two\s*legends',
-        'OP-10': r'OP-?10|royal\s*blood',
-        'OP-11': r'OP-?11|fist\s*of\s*divine',
-        'OP-12': r'OP-?12|legacy\s*of\s*the\s*master',
-        'OP-13': r'OP-?13|carrying\s*on\s*his\s*will',
-        'OP-14': r'OP-?14|azure\s*sea',
-        'EB-02': r'EB-?02|anime\s*25th',
-        'EB-03': r'EB-?03|heroines',
+        'OP-06':  r'OP-?06|wings\s*of\s*the\s*captain',
+        'OP-08':  r'OP-?08|two\s*legends',
+        'OP-10':  r'OP-?10|royal\s*blood',
+        'OP-11':  r'OP-?11|fist\s*of\s*divine',
+        'OP-12':  r'OP-?12|legacy\s*of\s*the\s*master',
+        'OP-13':  r'OP-?13|carrying\s*on\s*his\s*will',
+        'OP-14':  r'OP-?14|azure\s*sea',
+        'EB-02':  r'EB-?02|anime\s*25th',
+        'EB-03':  r'EB-?03|heroines',
         'PRB-02': r'PRB-?02|premium\s*vol\s*2',
     }
-
-    # Approximate CAD to USD conversion (update periodically or use API)
-    CAD_TO_USD = 0.74
 
     def __init__(self, retailer_config: Dict[str, Any]):
         super().__init__(retailer_config)
@@ -62,14 +60,21 @@ class PVPShoppeScraper(BaseScraper):
                         price_match = re.search(r'[\d,]+\.?\d*', price_text)
                         if price_match:
                             price_cad = float(price_match.group().replace(',', ''))
-                            price_usd = round(price_cad * self.CAD_TO_USD, 2)
+                            # Use live currency conversion (CAD -> USD)
+                            price_usd = convert_to_usd(price_cad, 'CAD')
                             if 10 < price_usd < 500:
                                 key = f"{set_code}_{product_type}"
                                 products[key] = {
                                     'price': price_usd,
                                     'currency': 'USD',
-                                    'in_stock': 'sold out' not in card.get_text().lower() and 'out of stock' not in card.get_text().lower(),
-                                    'source_url': 'https://pvpshoppe.com' + link.get('href', '') if link else self.COLLECTION_URL,
+                                    'in_stock': (
+                                        'sold out' not in card.get_text().lower()
+                                        and 'out of stock' not in card.get_text().lower()
+                                    ),
+                                    'source_url': (
+                                        'https://pvpshoppe.com' + link.get('href', '')
+                                        if link else self.COLLECTION_URL
+                                    ),
                                 }
                     break
 
