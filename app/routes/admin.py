@@ -138,6 +138,28 @@ def debug_rcj():
         return jsonify({"url": url, "error": str(exc), "type": type(exc).__name__})
 
 
+@admin_bp.route("/seed-rcj", methods=["POST"])
+def seed_rcj():
+    existing = Retailer.query.filter_by(slug="rarecardsjapan").first()
+    if existing:
+        return jsonify({"status": "already_exists", "id": existing.id})
+    from app.extensions import db as _db
+    retailer = Retailer(
+        name="Rare Cards Japan",
+        slug="rarecardsjapan",
+        base_url="https://www.rarecardsjapan.com",
+        country="GB",
+        currency="USD",
+        min_delay_seconds=2,
+        max_delay_seconds=4,
+        requests_per_minute=10,
+        is_active=True,
+    )
+    _db.session.add(retailer)
+    _db.session.commit()
+    return jsonify({"status": "created", "id": retailer.id, "name": retailer.name})
+
+
 @admin_bp.route("/debug-db")
 def debug_db():
     retailers = Retailer.query.all()
