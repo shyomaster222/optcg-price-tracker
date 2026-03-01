@@ -138,6 +138,29 @@ def debug_rcj():
         return jsonify({"url": url, "error": str(exc), "type": type(exc).__name__})
 
 
+@admin_bp.route("/seed-missing-products", methods=["POST"])
+def seed_missing_products():
+    from app.models.product import Product
+    from app.extensions import db as _db
+    from datetime import date
+    missing = [
+        {"set_code": "OP-13", "set_name": "CARRYING ON HIS WILL", "set_name_jp": "受け継ぐ意志", "release_date": date(2025, 11, 7), "msrp_jpy": 6600},
+        {"set_code": "OP-14", "set_name": "THE AZURE SEA'S SEVEN", "set_name_jp": "七海の覇王", "release_date": date(2026, 2, 6), "msrp_jpy": 6600},
+        {"set_code": "OP-15", "set_name": "ADVENTURE ON KAMI'S ISLAND", "set_name_jp": "神の島の冒険", "release_date": date(2026, 5, 30), "msrp_jpy": 6600},
+        {"set_code": "EB-04", "set_name": "EGGHEAD CRISIS", "set_name_jp": "エッグヘッド危機", "release_date": date(2025, 9, 27), "msrp_jpy": 6600},
+        {"set_code": "PRB-01", "set_name": "THE BEST", "set_name_jp": "THE BEST", "release_date": date(2024, 5, 25), "msrp_jpy": 8800},
+        {"set_code": "PRB-02", "set_name": "THE BEST VOL.2", "set_name_jp": "THE BEST vol.2", "release_date": date(2025, 7, 19), "msrp_jpy": 8800},
+    ]
+    added = []
+    for s in missing:
+        for product_type in ("box", "case"):
+            if not Product.query.filter_by(set_code=s["set_code"], product_type=product_type).first():
+                _db.session.add(Product(**s, product_type=product_type))
+                added.append(f"{s['set_code']} {product_type}")
+    _db.session.commit()
+    return jsonify({"added": added, "total_products": Product.query.count()})
+
+
 @admin_bp.route("/seed-rcj", methods=["POST"])
 def seed_rcj():
     existing = Retailer.query.filter_by(slug="rarecardsjapan").first()

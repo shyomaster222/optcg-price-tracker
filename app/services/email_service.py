@@ -55,13 +55,14 @@ def _latest_rcj_price(product_id: int, rcj_retailer_id: int) -> Optional[PriceHi
 
 
 def _cheapest_competitor(product_id: int, exclude_retailer_id: int) -> Optional[float]:
-    """Return MIN(price_usd) from all retailers except the excluded one."""
+    """Return MIN(price_usd or price) from all retailers except the excluded one."""
+    effective = func.coalesce(PriceHistory.price_usd, PriceHistory.price)
     result = (
-        db.session.query(func.min(PriceHistory.price_usd))
+        db.session.query(func.min(effective))
         .filter(
             PriceHistory.product_id == product_id,
             PriceHistory.retailer_id != exclude_retailer_id,
-            PriceHistory.price_usd.isnot(None),
+            effective.isnot(None),
         )
         .scalar()
     )
@@ -69,15 +70,32 @@ def _cheapest_competitor(product_id: int, exclude_retailer_id: int) -> Optional[
 
 
 def _avg_market_price(product_id: int, exclude_retailer_id: int) -> Optional[float]:
-    """Return AVG(price_usd) for the last 24 hours from all retailers except excluded."""
-    cutoff = datetime.utcnow() - timedelta(hours=_MARKET_WINDOW_HOURS)
-    result = (
-        db.session.query(func.avg(PriceHistory.price_usd))
+    """Return AVG(price_usd or price) using the latest price per retailer."""
+    effective = func.coalesce(PriceHistory.price_usd, PriceHistory.price)
+    # Use latest price per retailer (subquery: max scraped_at per retailer)
+    subq = (
+        db.session.query(
+            PriceHistory.retailer_id,
+            func.max(PriceHistory.scraped_at).label("latest"),
+        )
         .filter(
             PriceHistory.product_id == product_id,
             PriceHistory.retailer_id != exclude_retailer_id,
-            PriceHistory.price_usd.isnot(None),
-            PriceHistory.scraped_at >= cutoff,
+        )
+        .group_by(PriceHistory.retailer_id)
+        .subquery()
+    )
+    result = (
+        db.session.query(func.avg(effective))
+        .join(
+            subq,
+            (PriceHistory.retailer_id == subq.c.retailer_id)
+            & (PriceHistory.scraped_at == subq.c.latest),
+        )
+        .filter(
+            PriceHistory.product_id == product_id,
+            PriceHistory.retailer_id != exclude_retailer_id,
+            effective.isnot(None),
         )
         .scalar()
     )
