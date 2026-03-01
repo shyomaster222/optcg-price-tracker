@@ -68,6 +68,10 @@ class RareCardsJapanScraper(BaseScraper):
     def retailer_name(self) -> str:
         return "RareCardsJapan"
 
+    @property
+    def retailer_slug(self) -> str:
+        return "rarecardsjapan"
+
     def _get_store_currency(self) -> str:
         """Fetch the store's base currency from Shopify's /shop.json endpoint."""
         try:

@@ -39,6 +39,10 @@ class FPTradingCardsScraper(BaseScraper):
     def retailer_name(self) -> str:
         return "FPTradingCards"
 
+    @property
+    def retailer_slug(self) -> str:
+        return "fptradingcards"
+
     def scrape(self) -> List[dict]:
         """Scrape all One Piece sealed products from FP Trading Cards."""
         try:

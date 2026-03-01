@@ -31,6 +31,10 @@ class PVPShoppeScraper(BaseScraper):
     def retailer_name(self) -> str:
         return "PVPShoppe"
 
+    @property
+    def retailer_slug(self) -> str:
+        return "pvpshoppe"
+
     def scrape(self) -> List[dict]:
         """Scrape all One Piece sealed products from PVP Shoppe."""
         try:
