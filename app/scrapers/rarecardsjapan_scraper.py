@@ -56,10 +56,13 @@ COLLECTION_PATHS = [
 class RareCardsJapanScraper(BaseScraper):
     """Scraper for rarecardsjapan.com — Shopify JSON API."""
 
-    # Override Accept header: Shopify JSON API needs application/json,
-    # not the browser-style text/html header set by BaseScraper.
-    # This also avoids Cloudflare bot challenges (which target HTML page requests).
-    EXTRA_HEADERS = {"Accept": "application/json"}
+    # Override Accept header: Shopify JSON API needs application/json.
+    # Explicitly exclude brotli (br) from Accept-Encoding — the requests library
+    # cannot decompress brotli responses, so we force gzip/deflate only.
+    EXTRA_HEADERS = {
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip, deflate",
+    }
 
     @property
     def retailer_name(self) -> str:
