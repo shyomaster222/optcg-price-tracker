@@ -183,6 +183,37 @@ def seed_rcj():
     return jsonify({"status": "created", "id": retailer.id, "name": retailer.name})
 
 
+@admin_bp.route("/debug-op05")
+def debug_op05():
+    from app.models.product import Product
+    product = Product.query.filter_by(set_code="OP-05", product_type="box").first()
+    if not product:
+        return jsonify({"error": "OP-05 box not found"})
+    rows = (
+        PriceHistory.query
+        .filter_by(product_id=product.id)
+        .order_by(PriceHistory.scraped_at.desc())
+        .all()
+    )
+    rcj = Retailer.query.filter_by(slug="rarecardsjapan").first()
+    return jsonify({
+        "product_id": product.id,
+        "total_price_rows": len(rows),
+        "prices": [
+            {
+                "retailer_id": r.retailer_id,
+                "retailer": Retailer.query.get(r.retailer_id).name if Retailer.query.get(r.retailer_id) else "?",
+                "price": float(r.price) if r.price else None,
+                "price_usd": float(r.price_usd) if r.price_usd else None,
+                "currency": r.currency,
+                "scraped_at": r.scraped_at.isoformat(),
+            }
+            for r in rows
+        ],
+        "rcj_retailer_id": rcj.id if rcj else None,
+    })
+
+
 @admin_bp.route("/debug-db")
 def debug_db():
     from app.models.product import Product
