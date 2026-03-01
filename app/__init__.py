@@ -126,7 +126,7 @@ def _start_scheduler(app: Flask) -> None:
 
     scheduler.add_job(
         _daily_email_job,
-        trigger=CronTrigger(hour=8, minute=0),
+        trigger=CronTrigger(hour=4, minute=0),  # 12:00 HKT (UTC+8)
         id="daily_email",
         replace_existing=True,
     )
