@@ -39,6 +39,7 @@ SET_PATTERNS = {
     "OP-12": r"OP-?12|legacy\s*of\s*the\s*master",
     "OP-13": r"OP-?13|carrying\s*on\s*his\s*will",
     "OP-14": r"OP-?14|azure\s*sea",
+    "OP-15": r"OP-?15|kami",
     "EB-01": r"EB-?01|memorial\s*collection",
     "EB-02": r"EB-?02|anime\s*25th",
     "EB-03": r"EB-?03|heroines",

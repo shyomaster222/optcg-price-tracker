@@ -59,14 +59,12 @@ class FujiCardShopScraper(BaseScraper):
                 url = f"{self.BASE_URL}{self.CATEGORY_PATH}page/{page}/?currency=USD"
             try:
                 response = self.fetch(url)
+                # A non-existent page redirects to page 1 or returns no products
                 soup = BeautifulSoup(response.text, "lxml")
                 page_results = list(self._parse_products(soup, url))
                 if not page_results:
                     break
                 results.extend(page_results)
-                next_link = soup.select_one("a.next.page-numbers")
-                if not next_link:
-                    break
                 page += 1
             except Exception as e:
                 logger.error("Error scraping FujiCardShop page %d: %s", page, e)
