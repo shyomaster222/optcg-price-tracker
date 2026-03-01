@@ -78,3 +78,11 @@ def trigger_report():
     from app.tasks.daily_email import send_daily_price_report
     send_daily_price_report()
     return jsonify({"status": "ok", "message": "Report sent"})
+
+
+@admin_bp.route("/run-scraper", methods=["POST"])
+def trigger_scraper():
+    from app.scrapers.scraper_manager import ScraperManager
+    results = ScraperManager().run_all()
+    summary = {name: len(data) for name, data in results.items()}
+    return jsonify({"status": "ok", "results": summary})
