@@ -14,6 +14,9 @@ class FujiCardShopScraper(BaseScraper):
     BASE_URL = "https://www.fujicardshop.com"
     CATEGORY_PATH = "/product-category/one-piece/"
 
+    # Force gzip/deflate only — requests can't decompress brotli
+    EXTRA_HEADERS = {"Accept-Encoding": "gzip, deflate"}
+
     SET_PATTERNS = {
         'OP-01': r'OP-?01|romance\s*dawn',
         'OP-02': r'OP-?02|paramount\s*war',
