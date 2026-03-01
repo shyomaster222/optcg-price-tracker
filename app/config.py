@@ -22,6 +22,11 @@ class Config:
     SCRAPER_DELAY_MAX = int(os.environ.get('SCRAPER_DELAY_MAX', 5))
     SCRAPER_REQUESTS_PER_MINUTE = int(os.environ.get('SCRAPER_REQUESTS_PER_MINUTE', 10))
 
+    # Daily email (Gmail SMTP)
+    GMAIL_USER = os.environ.get('GMAIL_USER')
+    GMAIL_APP_PASSWORD = os.environ.get('GMAIL_APP_PASSWORD')
+    COMPANY_EMAIL = os.environ.get('COMPANY_EMAIL')
+
 
 class DevelopmentConfig(Config):
     """Development configuration"""

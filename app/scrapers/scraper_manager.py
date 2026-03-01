@@ -20,6 +20,7 @@ from typing import Dict, List, Optional
 from app.scrapers.base_scraper import BaseScraper
 from app.scrapers.pvpshoppe_scraper import PVPShoppeScraper
 from app.scrapers.fptradingcards_scraper import FPTradingCardsScraper
+from app.scrapers.rarecardsjapan_scraper import RareCardsJapanScraper
 from app.services.price_service import PriceService
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ class ScraperManager:
         self._scrapers: List[BaseScraper] = [
             PVPShoppeScraper(),
             FPTradingCardsScraper(),
+            RareCardsJapanScraper(),
         ]
         self._max_workers = max_workers
 

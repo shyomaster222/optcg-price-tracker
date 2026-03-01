@@ -118,5 +118,18 @@ def _start_scheduler(app: Flask) -> None:
         replace_existing=True,
     )
 
+    # -- Daily email report ------------------------------------------------
+    def _daily_email_job():
+        with app.app_context():
+            from app.tasks.daily_email import send_daily_price_report
+            send_daily_price_report()
+
+    scheduler.add_job(
+        _daily_email_job,
+        trigger=CronTrigger(hour=8, minute=0),
+        id="daily_email",
+        replace_existing=True,
+    )
+
     scheduler.start()
-    logger.info("APScheduler started with scraping / alert-eval / archival jobs")
+    logger.info("APScheduler started with scraping / alert-eval / archival / daily-email jobs")
