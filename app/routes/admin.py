@@ -75,9 +75,31 @@ def ping():
 
 @admin_bp.route("/send-report", methods=["POST"])
 def trigger_report():
-    from app.tasks.daily_email import send_daily_price_report
-    send_daily_price_report()
-    return jsonify({"status": "ok", "message": "Report sent"})
+    import requests as http_requests
+    from app.services.email_service import _build_report
+    api_key = __import__('flask').current_app.config.get("RESEND_API_KEY")
+    company_email = __import__('flask').current_app.config.get("COMPANY_EMAIL")
+    report = _build_report()
+    from app.services.email_service import _build_html
+    html_body = _build_html(report)
+    flagged = report["flagged"]
+    date_str = report["date"]
+    subject = f"[OPTCG Price Report] {date_str} — {flagged} product{'s' if flagged != 1 else ''} flagged"
+    resp = http_requests.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={"from": f"OPTCG Tracker <{company_email}>", "to": [company_email], "subject": subject, "html": html_body},
+        timeout=15,
+    )
+    return jsonify({
+        "status": "ok",
+        "report_rows": report["total"],
+        "flagged": flagged,
+        "to": company_email,
+        "subject": subject,
+        "resend_status": resp.status_code,
+        "resend_body": resp.json(),
+    })
 
 
 @admin_bp.route("/run-scraper", methods=["POST"])
