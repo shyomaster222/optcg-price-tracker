@@ -22,6 +22,10 @@ class Config:
     SCRAPER_DELAY_MAX = int(os.environ.get('SCRAPER_DELAY_MAX', 5))
     SCRAPER_REQUESTS_PER_MINUTE = int(os.environ.get('SCRAPER_REQUESTS_PER_MINUTE', 10))
 
+    # Daily email (Resend)
+    RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
+    COMPANY_EMAIL = os.environ.get('COMPANY_EMAIL')
+
 
 class DevelopmentConfig(Config):
     """Development configuration"""
