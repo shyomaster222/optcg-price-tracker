@@ -95,12 +95,22 @@ def debug_rcj():
     url = "https://www.rarecardsjapan.com/collections/booster-boxes/products.json?limit=250"
     try:
         resp = scraper.fetch(url)
-        data = resp.json()
-        products = data.get("products", [])
-        return jsonify({
-            "status_code": resp.status_code,
-            "product_count": len(products),
-            "titles": [p.get("title") for p in products[:5]],
-        })
+        raw = resp.text[:300]
+        try:
+            data = resp.json()
+            products = data.get("products", [])
+            return jsonify({
+                "url": url,
+                "status_code": resp.status_code,
+                "product_count": len(products),
+                "titles": [p.get("title") for p in products[:5]],
+            })
+        except Exception as json_exc:
+            return jsonify({
+                "url": url,
+                "status_code": resp.status_code,
+                "json_error": str(json_exc),
+                "raw_response": raw,
+            })
     except Exception as exc:
-        return jsonify({"error": str(exc), "type": type(exc).__name__})
+        return jsonify({"url": url, "error": str(exc), "type": type(exc).__name__})
