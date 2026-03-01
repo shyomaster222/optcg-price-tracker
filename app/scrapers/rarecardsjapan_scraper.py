@@ -77,7 +77,9 @@ class RareCardsJapanScraper(BaseScraper):
 
     def _fetch_products_page(self, path: str, page: int) -> list:
         """Fetch one page of products from a Shopify collection JSON endpoint."""
-        url = f"{BASE_URL}{path}?limit=250&page={page}"
+        url = f"{BASE_URL}{path}?limit=250"
+        if page > 1:
+            url += f"&page={page}"
         try:
             resp = self.fetch(url)
             return resp.json().get("products", [])

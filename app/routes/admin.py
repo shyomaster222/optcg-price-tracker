@@ -92,7 +92,7 @@ def trigger_scraper():
 def debug_rcj():
     from app.scrapers.rarecardsjapan_scraper import RareCardsJapanScraper
     scraper = RareCardsJapanScraper()
-    url = "https://www.rarecardsjapan.com/collections/booster-boxes/products.json?limit=250&page=1"
+    url = "https://www.rarecardsjapan.com/collections/booster-boxes/products.json?limit=250"
     try:
         resp = scraper.fetch(url)
         data = resp.json()
