@@ -1,10 +1,10 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import re
 import logging
 from bs4 import BeautifulSoup
 
 from app.scrapers.base_scraper import BaseScraper
-from app.utils.currency import convert_to_usd  # live currency conversion
+from app.utils.currency import convert_to_usd
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +27,21 @@ class PVPShoppeScraper(BaseScraper):
         'PRB-02': r'PRB-?02|premium\s*vol\s*2',
     }
 
-    def __init__(self, retailer_config: Dict[str, Any]):
-        super().__init__(retailer_config)
-        self._products_cache = None
+    @property
+    def retailer_name(self) -> str:
+        return "PVPShoppe"
 
-    def build_search_url(self, product) -> str:
-        return self.COLLECTION_URL
+    def scrape(self) -> List[dict]:
+        """Scrape all One Piece sealed products from PVP Shoppe."""
+        try:
+            response = self.fetch(self.COLLECTION_URL)
+            soup = BeautifulSoup(response.text, "lxml")
+            return list(self._parse_products(soup))
+        except Exception as e:
+            logger.error("Error scraping PVP Shoppe: %s", e)
+            return []
 
-    def _fetch_all_products(self, soup: BeautifulSoup) -> Dict[str, Dict]:
-        products = {}
+    def _parse_products(self, soup: BeautifulSoup):
         cards = soup.select('.product-card, .card-wrapper, [class*="product-card"]')
 
         for card in cards:
@@ -60,13 +66,14 @@ class PVPShoppeScraper(BaseScraper):
                         price_match = re.search(r'[\d,]+\.?\d*', price_text)
                         if price_match:
                             price_cad = float(price_match.group().replace(',', ''))
-                            # Use live currency conversion (CAD -> USD)
                             price_usd = convert_to_usd(price_cad, 'CAD')
                             if 10 < price_usd < 500:
-                                key = f"{set_code}_{product_type}"
-                                products[key] = {
-                                    'price': price_usd,
-                                    'currency': 'USD',
+                                yield {
+                                    'set_code': set_code,
+                                    'product_type': product_type,
+                                    'price': price_cad,
+                                    'price_usd': price_usd,
+                                    'currency': 'CAD',
                                     'in_stock': (
                                         'sold out' not in card.get_text().lower()
                                         and 'out of stock' not in card.get_text().lower()
@@ -77,40 +84,3 @@ class PVPShoppeScraper(BaseScraper):
                                     ),
                                 }
                     break
-
-        return products
-
-    def parse_price(self, soup: BeautifulSoup, product) -> Optional[Dict[str, Any]]:
-        try:
-            if self._products_cache is None:
-                self._products_cache = self._fetch_all_products(soup)
-            return self._products_cache.get(f"{product.set_code}_{product.product_type}")
-        except Exception as e:
-            logger.error(f"Error parsing PVP Shoppe: {e}")
-            return None
-
-    def parse_stock_status(self, soup: BeautifulSoup) -> bool:
-        return True
-
-    def scrape_all_products(self, products):
-        self.rate_limiter.wait()
-        try:
-            soup = self.fetch_page(self.COLLECTION_URL)
-            if not soup:
-                return []
-            self._products_cache = self._fetch_all_products(soup)
-            results = []
-            for product in products:
-                data = self._products_cache.get(f"{product.set_code}_{product.product_type}")
-                if data:
-                    results.append({
-                        'product_id': product.id,
-                        'price': data['price'],
-                        'currency': data['currency'],
-                        'in_stock': data.get('in_stock', True),
-                        'source_url': data.get('source_url', self.COLLECTION_URL),
-                    })
-            return results
-        except Exception as e:
-            logger.error(f"Error scraping PVP Shoppe: {e}")
-            return []

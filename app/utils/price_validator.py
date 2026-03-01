@@ -165,7 +165,7 @@ def validate_price(
 # ---------------------------------------------------------------------------
 
 def validate_price_for_card(
-    card_id: int,
+    product_id: int,
     new_price_usd: float,
     lookback: int = 30,
 ) -> PriceValidationResult:
@@ -177,21 +177,21 @@ def validate_price_for_card(
 
     Parameters
     ----------
-    card_id       : card to look up.
+    product_id    : product to look up.
     new_price_usd : freshly scraped price in USD.
     lookback      : how many historical prices to consider.
     """
-    from app.models.price import Price  # local import to avoid circular deps
+    from app.models.price import PriceHistory  # local import to avoid circular deps
 
     history = (
-        Price.query.filter_by(card_id=card_id)
-        .order_by(Price.scraped_at.desc())
+        PriceHistory.query.filter_by(product_id=product_id)
+        .order_by(PriceHistory.scraped_at.desc())
         .limit(lookback)
         .all()
     )
-    historical_prices = [p.price_usd for p in reversed(history)]
+    historical_prices = [float(p.price_usd) for p in reversed(history) if p.price_usd]
     return validate_price(
         new_price_usd=new_price_usd,
         historical_prices=historical_prices,
-        card_id=card_id,
+        card_id=product_id,
     )

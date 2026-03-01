@@ -32,9 +32,9 @@ def list_alerts():
       card_id   (int, optional)
       active    (bool, default true)
     """
-    card_id = request.args.get("card_id", type=int)
+    product_id = request.args.get("product_id", type=int)
     active_only = request.args.get("active", "true").lower() != "false"
-    alerts = get_alerts(card_id=card_id, active_only=active_only)
+    alerts = get_alerts(product_id=product_id, active_only=active_only)
     return jsonify([a.to_dict() for a in alerts])
 
 
@@ -42,18 +42,18 @@ def list_alerts():
 def create_alert_endpoint():
     """
     Body (JSON):
-      card_id   : int   (required)
-      threshold : float (required, > 0)
-      direction : str   (optional, 'below' | 'above', default 'below')
-      user_id   : int   (optional)
+      product_id : int   (required)
+      threshold  : float (required, > 0)
+      direction  : str   (optional, 'below' | 'above', default 'below')
+      user_id    : int   (optional)
     """
     data = request.get_json(force=True, silent=True) or {}
 
-    card_id = data.get("card_id")
+    product_id = data.get("product_id")
     threshold = data.get("threshold")
 
-    if card_id is None or threshold is None:
-        return jsonify({"error": "card_id and threshold are required"}), 400
+    if product_id is None or threshold is None:
+        return jsonify({"error": "product_id and threshold are required"}), 400
 
     try:
         threshold = float(threshold)
@@ -65,7 +65,7 @@ def create_alert_endpoint():
 
     try:
         alert = create_alert(
-            card_id=int(card_id),
+            product_id=int(product_id),
             threshold=threshold,
             direction=direction,
             user_id=int(user_id) if user_id is not None else None,

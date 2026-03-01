@@ -79,16 +79,16 @@ class TestGetLatestPrices:
     def test_prices_list_contains_seeded_retailers(self, client, sample_data):
         product_id = sample_data["product_box"].id
         data = client.get(f"/api/products/{product_id}/latest").get_json()
-        retailer_slugs = [p["retailer_slug"] for p in data["prices"]]
-        assert "amazon-jp" in retailer_slugs
-        assert "ebay" in retailer_slugs
+        retailer_names = [p["retailer"] for p in data["prices"]]
+        assert "Amazon Japan" in retailer_names
+        assert "eBay" in retailer_names
 
     def test_price_entry_has_required_fields(self, client, sample_data):
         product_id = sample_data["product_box"].id
         data = client.get(f"/api/products/{product_id}/latest").get_json()
         assert len(data["prices"]) > 0
         price_entry = data["prices"][0]
-        for field in ("retailer_name", "retailer_slug", "price", "price_usd", "currency", "in_stock", "scraped_at"):
+        for field in ("retailer", "retailer_id", "price", "price_usd", "currency", "in_stock", "scraped_at"):
             assert field in price_entry, f"Missing field: {field}"
 
 
@@ -97,22 +97,22 @@ class TestGetLatestPrices:
 # ---------------------------------------------------------------------------
 
 class TestGetPriceHistory:
-    """GET /api/products/<id>/history"""
+    """GET /api/prices/<id>"""
 
     def test_returns_200(self, client, sample_data):
         product_id = sample_data["product_box"].id
-        resp = client.get(f"/api/products/{product_id}/history")
+        resp = client.get(f"/api/prices/{product_id}")
         assert resp.status_code == 200
 
     def test_returns_dict_with_datasets(self, client, sample_data):
         product_id = sample_data["product_box"].id
-        data = client.get(f"/api/products/{product_id}/history").get_json()
+        data = client.get(f"/api/prices/{product_id}").get_json()
         assert "datasets" in data
         assert isinstance(data["datasets"], list)
 
     def test_dataset_has_required_fields(self, client, sample_data):
         product_id = sample_data["product_box"].id
-        data = client.get(f"/api/products/{product_id}/history").get_json()
+        data = client.get(f"/api/prices/{product_id}").get_json()
         if data["datasets"]:
             ds = data["datasets"][0]
             for field in ("label", "data", "borderColor"):
@@ -120,7 +120,7 @@ class TestGetPriceHistory:
 
     def test_days_query_param_accepted(self, client, sample_data):
         product_id = sample_data["product_box"].id
-        resp = client.get(f"/api/products/{product_id}/history?days=7")
+        resp = client.get(f"/api/prices/{product_id}?days=7")
         assert resp.status_code == 200
 
 
@@ -135,7 +135,7 @@ class TestAlertsCRUD:
         product_id = sample_data["product_box"].id
         resp = client.post(
             "/api/alerts",
-            data=json.dumps({"card_id": product_id, "threshold": 40.0, "direction": "below"}),
+            data=json.dumps({"product_id": product_id, "threshold": 40.0, "direction": "below"}),
             content_type="application/json",
         )
         assert resp.status_code == 201
@@ -144,7 +144,7 @@ class TestAlertsCRUD:
         product_id = sample_data["product_box"].id
         resp = client.post(
             "/api/alerts",
-            data=json.dumps({"card_id": product_id, "threshold": 40.0}),
+            data=json.dumps({"product_id": product_id, "threshold": 40.0}),
             content_type="application/json",
         )
         data = resp.get_json()
@@ -162,7 +162,7 @@ class TestAlertsCRUD:
         product_id = sample_data["product_box"].id
         resp = client.post(
             "/api/alerts",
-            data=json.dumps({"card_id": product_id}),
+            data=json.dumps({"product_id": product_id}),
             content_type="application/json",
         )
         assert resp.status_code == 400
@@ -179,7 +179,7 @@ class TestAlertsCRUD:
         product_id = sample_data["product_box"].id
         client.post(
             "/api/alerts",
-            data=json.dumps({"card_id": product_id, "threshold": 35.0}),
+            data=json.dumps({"product_id": product_id, "threshold": 35.0}),
             content_type="application/json",
         )
         alerts = client.get("/api/alerts").get_json()
@@ -190,7 +190,7 @@ class TestAlertsCRUD:
         product_id = sample_data["product_box"].id
         create_resp = client.post(
             "/api/alerts",
-            data=json.dumps({"card_id": product_id, "threshold": 45.0}),
+            data=json.dumps({"product_id": product_id, "threshold": 45.0}),
             content_type="application/json",
         )
         alert_id = create_resp.get_json()["id"]
@@ -203,18 +203,18 @@ class TestAlertsCRUD:
 
 
 # ---------------------------------------------------------------------------
-# GET /api/export/cards  +  CSV/JSON export
+# GET /api/export/products  +  CSV/JSON export
 # ---------------------------------------------------------------------------
 
 class TestExportEndpoints:
-    """GET /api/export/cards, /api/export/prices/<id>.csv, /api/export/prices/<id>.json"""
+    """GET /api/export/products, /api/export/prices/<id>.csv, /api/export/prices/<id>.json"""
 
     def test_export_cards_returns_200(self, client, sample_data):
-        resp = client.get("/api/export/cards")
+        resp = client.get("/api/export/products")
         assert resp.status_code == 200
 
     def test_export_cards_returns_json_list(self, client, sample_data):
-        data = client.get("/api/export/cards").get_json()
+        data = client.get("/api/export/products").get_json()
         assert isinstance(data, list)
 
     def test_export_prices_csv_returns_200(self, client, sample_data):

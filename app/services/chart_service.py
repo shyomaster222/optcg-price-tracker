@@ -1,12 +1,7 @@
 """
 app/services/chart_service.py
 
-ChartService  –  builds chart-ready data from price history.
-
-Fix applied
------------
-Added all known retailer colours so the front-end chart never renders
-a grey/fallback line for a recognised retailer.
+ChartService – builds chart-ready data from price history.
 """
 
 from __future__ import annotations
@@ -16,21 +11,18 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from app.models.price import Price
+from app.models.price import PriceHistory
+from app.models.retailer import Retailer
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Retailer colour palette
+# Retailer colour palette (keys = retailer names as stored in the DB)
 # ---------------------------------------------------------------------------
-# Keys are the exact strings stored in Price.retailer.
-# Values are CSS hex colours used by Chart.js on the front end.
 
 RETAILER_COLORS: Dict[str, str] = {
-    # --- originally present ---
     "PVPShoppe": "#e63946",
     "FPTradingCards": "#457b9d",
-    # --- added in this fix ---
     "TCGPlayer": "#f4a261",
     "CardMarket": "#2a9d8f",
     "YYTCGShop": "#e9c46a",
@@ -41,52 +33,44 @@ RETAILER_COLORS: Dict[str, str] = {
     "TrollandToad": "#52b788",
     "ChannelFireball": "#d62828",
     "StarCityGames": "#023e8a",
+    "Amazon Japan": "#ff9900",
+    "TCGRepublic": "#1a73e8",
+    "eBay": "#e53238",
+    "PriceCharting": "#48bb78",
+    "Japan TCG": "#805ad5",
+    "TCG Hobby": "#dd6b20",
+    "A Hidden Fortress": "#319795",
 }
 
-DEFAULT_COLOR = "#adb5bd"   # Bootstrap grey  –  fallback for unknown retailers
+DEFAULT_COLOR = "#adb5bd"
 
 
 class ChartService:
-    """
-    Provides chart-ready time-series data for a given card.
-    """
 
-    def get_chart_data(
+    def get_price_chart_data(
         self,
-        card_id: int,
+        product_id: int,
         days: int = 30,
-        retailers: Optional[List[str]] = None,
+        retailer_id: Optional[int] = None,
     ) -> dict:
-        """
-        Build a Chart.js-compatible dataset for *card_id*.
-
-        Parameters
-        ----------
-        card_id  : the card to chart.
-        days     : look-back window in days (default 30).
-        retailers: optional whitelist; if None all retailers are included.
-
-        Returns
-        -------
-        dict with keys 'labels' (ISO dates) and 'datasets' (list of dicts).
-        """
+        """Build a Chart.js-compatible dataset for a product."""
         since = datetime.utcnow() - timedelta(days=days)
-        q = Price.query.filter(
-            Price.card_id == card_id,
-            Price.scraped_at >= since,
-        ).order_by(Price.scraped_at.asc())
+        q = PriceHistory.query.filter(
+            PriceHistory.product_id == product_id,
+            PriceHistory.scraped_at >= since,
+        ).order_by(PriceHistory.scraped_at.asc())
 
-        if retailers:
-            q = q.filter(Price.retailer.in_(retailers))
+        if retailer_id:
+            q = q.filter(PriceHistory.retailer_id == retailer_id)
 
         prices = q.all()
 
-        # Group by retailer
         series: Dict[str, List] = defaultdict(list)
         for p in prices:
-            series[p.retailer].append({
+            retailer_name = p.retailer.name if p.retailer else "Unknown"
+            series[retailer_name].append({
                 "x": p.scraped_at.strftime("%Y-%m-%dT%H:%M:%S"),
-                "y": p.price_usd,
+                "y": float(p.price) if p.price else 0,
             })
 
         datasets = []
@@ -96,8 +80,32 @@ class ChartService:
                 "label": retailer,
                 "data": points,
                 "borderColor": color,
-                "backgroundColor": color + "33",  # 20 % opacity fill
+                "backgroundColor": color + "33",
                 "tension": 0.3,
             })
 
         return {"datasets": datasets}
+
+    def get_comparison_data(self, product_id: int) -> dict:
+        """Get current price comparison across retailers."""
+        retailers = Retailer.query.filter_by(is_active=True).all()
+
+        comparisons = []
+        for retailer in retailers:
+            latest = (
+                PriceHistory.query
+                .filter_by(product_id=product_id, retailer_id=retailer.id)
+                .order_by(PriceHistory.scraped_at.desc())
+                .first()
+            )
+            if latest:
+                comparisons.append({
+                    "retailer": retailer.name,
+                    "price": float(latest.price),
+                    "price_usd": float(latest.price_usd) if latest.price_usd else None,
+                    "currency": latest.currency,
+                    "in_stock": latest.in_stock,
+                    "scraped_at": latest.scraped_at.isoformat(),
+                })
+
+        return {"product_id": product_id, "comparisons": comparisons}

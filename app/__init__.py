@@ -18,13 +18,10 @@ import logging
 import os
 
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
+
+from app.extensions import db, migrate
 
 logger = logging.getLogger(__name__)
-
-db = SQLAlchemy()
-migrate = Migrate()
 
 
 def create_app(config_name: str = "default") -> Flask:

@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import re
 import logging
 from bs4 import BeautifulSoup
@@ -14,7 +14,6 @@ class FPTradingCardsScraper(BaseScraper):
     SHOP_URL = "https://www.fptradingcards.com/shop/"
 
     SET_PATTERNS = {
-        # OP sets OP-01 through OP-14
         'OP-01': r'OP-?01|romance\s*dawn',
         'OP-02': r'OP-?02|paramount\s*war',
         'OP-03': r'OP-?03|pillars\s*of\s*strength',
@@ -29,25 +28,28 @@ class FPTradingCardsScraper(BaseScraper):
         'OP-12': r'OP-?12|legacy\s*of\s*the\s*master',
         'OP-13': r'OP-?13|carrying\s*on\s*his\s*will',
         'OP-14': r'OP-?14|azure\s*sea',
-        # EB sets EB-01 through EB-03
         'EB-01': r'EB-?01|memorial',
         'EB-02': r'EB-?02|anime\s*25th',
         'EB-03': r'EB-?03|heroines',
-        # PRB sets PRB-01 and PRB-02
         'PRB-01': r'PRB-?01|the\s*best(?!\s*vol)',
         'PRB-02': r'PRB-?02|the\s*best\s*vol\.?\s*2',
     }
 
-    def __init__(self, retailer_config: Dict[str, Any]):
-        super().__init__(retailer_config)
-        self._products_cache = None
+    @property
+    def retailer_name(self) -> str:
+        return "FPTradingCards"
 
-    def build_search_url(self, product) -> str:
-        return self.SHOP_URL
+    def scrape(self) -> List[dict]:
+        """Scrape all One Piece sealed products from FP Trading Cards."""
+        try:
+            response = self.fetch(self.SHOP_URL)
+            soup = BeautifulSoup(response.text, "lxml")
+            return list(self._parse_products(soup))
+        except Exception as e:
+            logger.error("Error scraping FP Trading Cards: %s", e)
+            return []
 
-    def _fetch_all_products(self, soup: BeautifulSoup) -> Dict[str, Dict]:
-        """Parse WooCommerce shop page"""
-        products = {}
+    def _parse_products(self, soup: BeautifulSoup):
         items = soup.select('.product, .type-product, li.product')
 
         for item in items:
@@ -73,48 +75,13 @@ class FPTradingCardsScraper(BaseScraper):
                         if price_match:
                             price = float(price_match.group().replace(',', ''))
                             if 10 < price < 500:
-                                key = f"{set_code}_{product_type}"
-                                products[key] = {
+                                yield {
+                                    'set_code': set_code,
+                                    'product_type': product_type,
                                     'price': price,
+                                    'price_usd': price,
                                     'currency': 'USD',
                                     'in_stock': 'out of stock' not in item.get_text().lower(),
                                     'source_url': link.get('href', self.SHOP_URL) if link else self.SHOP_URL,
                                 }
                     break
-
-        return products
-
-    def parse_price(self, soup: BeautifulSoup, product) -> Optional[Dict[str, Any]]:
-        try:
-            if self._products_cache is None:
-                self._products_cache = self._fetch_all_products(soup)
-            return self._products_cache.get(f"{product.set_code}_{product.product_type}")
-        except Exception as e:
-            logger.error(f"Error parsing FP Trading Cards: {e}")
-            return None
-
-    def parse_stock_status(self, soup: BeautifulSoup) -> bool:
-        return True
-
-    def scrape_all_products(self, products):
-        self.rate_limiter.wait()
-        try:
-            soup = self.fetch_page(self.SHOP_URL)
-            if not soup:
-                return []
-            self._products_cache = self._fetch_all_products(soup)
-            results = []
-            for product in products:
-                data = self._products_cache.get(f"{product.set_code}_{product.product_type}")
-                if data:
-                    results.append({
-                        'product_id': product.id,
-                        'price': data['price'],
-                        'currency': data['currency'],
-                        'in_stock': data.get('in_stock', True),
-                        'source_url': data.get('source_url', self.SHOP_URL),
-                    })
-            return results
-        except Exception as e:
-            logger.error(f"Error scraping FP Trading Cards: {e}")
-            return []
