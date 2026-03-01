@@ -110,6 +110,36 @@ def trigger_scraper():
     return jsonify({"status": "ok", "results": summary})
 
 
+@admin_bp.route("/debug-fuji")
+def debug_fuji():
+    from app.scrapers.fujicardshop_scraper import FujiCardShopScraper
+    from bs4 import BeautifulSoup
+    scraper = FujiCardShopScraper()
+    url = "https://www.fujicardshop.com/product-category/one-piece/?currency=USD"
+    try:
+        resp = scraper.fetch(url)
+        soup = BeautifulSoup(resp.text, "lxml")
+        items = soup.select(".product, .type-product, li.product")
+        titles = []
+        for item in items[:5]:
+            t = item.select_one(".woocommerce-loop-product__title, .product_title, h2, h3")
+            p = item.select_one(".price .woocommerce-Price-amount bdi") or item.select_one(".woocommerce-Price-amount")
+            titles.append({
+                "title": t.get_text(strip=True) if t else None,
+                "price_text": p.get_text(strip=True) if p else None,
+            })
+        return jsonify({
+            "status_code": resp.status_code,
+            "content_type": resp.headers.get("Content-Type"),
+            "html_length": len(resp.text),
+            "product_elements_found": len(items),
+            "first_5": titles,
+            "raw_snippet": resp.text[2000:2500],
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc), "type": type(exc).__name__})
+
+
 @admin_bp.route("/debug-rcj")
 def debug_rcj():
     from app.scrapers.rarecardsjapan_scraper import RareCardsJapanScraper
