@@ -71,3 +71,10 @@ def health_json():
 @admin_bp.route("/ping")
 def ping():
     return jsonify({"status": "ok", "timestamp": datetime.utcnow().isoformat()})
+
+
+@admin_bp.route("/send-report", methods=["POST"])
+def trigger_report():
+    from app.tasks.daily_email import send_daily_price_report
+    send_daily_price_report()
+    return jsonify({"status": "ok", "message": "Report sent"})
