@@ -136,3 +136,25 @@ def debug_rcj():
             })
     except Exception as exc:
         return jsonify({"url": url, "error": str(exc), "type": type(exc).__name__})
+
+
+@admin_bp.route("/debug-db")
+def debug_db():
+    retailers = Retailer.query.all()
+    retailer_info = [{"id": r.id, "name": r.name, "slug": r.slug} for r in retailers]
+    rcj = Retailer.query.filter_by(slug="rarecardsjapan").first()
+    rcj_price_count = (
+        PriceHistory.query.filter_by(retailer_id=rcj.id).count() if rcj else 0
+    )
+    from app.models.product import Product
+    product_count = Product.query.count()
+    sample_products = [
+        {"id": p.id, "set_code": p.set_code, "product_type": p.product_type}
+        for p in Product.query.limit(5).all()
+    ]
+    return jsonify({
+        "retailers": retailer_info,
+        "product_count": product_count,
+        "sample_products": sample_products,
+        "rcj_price_rows": rcj_price_count,
+    })
