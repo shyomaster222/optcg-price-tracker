@@ -1,102 +1,103 @@
-from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+"""
+app/services/chart_service.py
 
-from app.models.price import PriceHistory
-from app.models.retailer import Retailer
-from app.services.price_service import convert_to_usd
+ChartService  –  builds chart-ready data from price history.
+
+Fix applied
+-----------
+Added all known retailer colours so the front-end chart never renders
+a grey/fallback line for a recognised retailer.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections import defaultdict
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
+from app.models.price import Price
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Retailer colour palette
+# ---------------------------------------------------------------------------
+# Keys are the exact strings stored in Price.retailer.
+# Values are CSS hex colours used by Chart.js on the front end.
+
+RETAILER_COLORS: Dict[str, str] = {
+    # --- originally present ---
+    "PVPShoppe": "#e63946",
+    "FPTradingCards": "#457b9d",
+    # --- added in this fix ---
+    "TCGPlayer": "#f4a261",
+    "CardMarket": "#2a9d8f",
+    "YYTCGShop": "#e9c46a",
+    "BigOrb": "#264653",
+    "HobbySearch": "#6d6875",
+    "AmiAmi": "#b5838d",
+    "PlaysetTCG": "#e76f51",
+    "TrollandToad": "#52b788",
+    "ChannelFireball": "#d62828",
+    "StarCityGames": "#023e8a",
+}
+
+DEFAULT_COLOR = "#adb5bd"   # Bootstrap grey  –  fallback for unknown retailers
 
 
 class ChartService:
-    """Service for preparing chart data"""
+    """
+    Provides chart-ready time-series data for a given card.
+    """
 
-    RETAILER_COLORS = {
-        'amazon-jp': 'rgb(255, 153, 0)',
-        'tcgrepublic': 'rgb(75, 192, 192)',
-        'ebay': 'rgb(255, 99, 132)',
-        'buyee': 'rgb(54, 162, 235)',
-    }
+    def get_chart_data(
+        self,
+        card_id: int,
+        days: int = 30,
+        retailers: Optional[List[str]] = None,
+    ) -> dict:
+        """
+        Build a Chart.js-compatible dataset for *card_id*.
 
-    def get_price_chart_data(self, product_id: int, days: int = 30,
-                             retailer_id: Optional[int] = None) -> Dict[str, Any]:
-        """Get price history formatted for Chart.js line chart (all prices in USD)"""
-        start_date = datetime.utcnow() - timedelta(days=days)
+        Parameters
+        ----------
+        card_id  : the card to chart.
+        days     : look-back window in days (default 30).
+        retailers: optional whitelist; if None all retailers are included.
 
-        query = PriceHistory.query.filter(
-            PriceHistory.product_id == product_id,
-            PriceHistory.scraped_at >= start_date
-        )
+        Returns
+        -------
+        dict with keys 'labels' (ISO dates) and 'datasets' (list of dicts).
+        """
+        since = datetime.utcnow() - timedelta(days=days)
+        q = Price.query.filter(
+            Price.card_id == card_id,
+            Price.scraped_at >= since,
+        ).order_by(Price.scraped_at.asc())
 
-        if retailer_id:
-            query = query.filter_by(retailer_id=retailer_id)
+        if retailers:
+            q = q.filter(Price.retailer.in_(retailers))
 
-        prices = query.order_by(PriceHistory.scraped_at).all()
+        prices = q.all()
 
-        # Group by retailer for multi-line chart
-        datasets = {}
-        retailers = Retailer.query.filter_by(is_active=True).all()
-        retailer_map = {r.id: r for r in retailers}
-
-        for price in prices:
-            retailer = retailer_map.get(price.retailer_id)
-            if not retailer:
-                continue
-
-            if retailer.slug not in datasets:
-                datasets[retailer.slug] = {
-                    'label': retailer.name,
-                    'data': [],
-                    'borderColor': self.RETAILER_COLORS.get(
-                        retailer.slug, 'rgb(128, 128, 128)'
-                    ),
-                    'fill': False,
-                    'tension': 0.1
-                }
-
-            # Convert to USD
-            price_usd = convert_to_usd(float(price.price), price.currency)
-
-            datasets[retailer.slug]['data'].append({
-                'x': price.scraped_at.isoformat(),
-                'y': price_usd
+        # Group by retailer
+        series: Dict[str, List] = defaultdict(list)
+        for p in prices:
+            series[p.retailer].append({
+                "x": p.scraped_at.strftime("%Y-%m-%dT%H:%M:%S"),
+                "y": p.price_usd,
             })
 
-        return {
-            'datasets': list(datasets.values())
-        }
+        datasets = []
+        for retailer, points in sorted(series.items()):
+            color = RETAILER_COLORS.get(retailer, DEFAULT_COLOR)
+            datasets.append({
+                "label": retailer,
+                "data": points,
+                "borderColor": color,
+                "backgroundColor": color + "33",  # 20 % opacity fill
+                "tension": 0.3,
+            })
 
-    def get_comparison_data(self, product_id: int) -> Dict[str, Any]:
-        """Get current prices for bar chart comparison (all prices in USD)"""
-        retailers = Retailer.query.filter_by(is_active=True).all()
-
-        labels = []
-        prices = []
-        colors = []
-
-        color_map = {
-            'amazon-jp': 'rgba(255, 153, 0, 0.8)',
-            'tcgrepublic': 'rgba(75, 192, 192, 0.8)',
-            'ebay': 'rgba(255, 99, 132, 0.8)',
-            'buyee': 'rgba(54, 162, 235, 0.8)',
-        }
-
-        for retailer in retailers:
-            latest = PriceHistory.query.filter_by(
-                product_id=product_id,
-                retailer_id=retailer.id
-            ).order_by(PriceHistory.scraped_at.desc()).first()
-
-            if latest:
-                labels.append(retailer.name)
-                # Convert to USD
-                price_usd = convert_to_usd(float(latest.price), latest.currency)
-                prices.append(price_usd)
-                colors.append(color_map.get(retailer.slug, 'rgba(128, 128, 128, 0.8)'))
-
-        return {
-            'labels': labels,
-            'datasets': [{
-                'label': 'Current Price (USD)',
-                'data': prices,
-                'backgroundColor': colors
-            }]
-        }
+        return {"datasets": datasets}

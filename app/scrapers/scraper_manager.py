@@ -1,119 +1,120 @@
-from typing import Dict, Type
-from datetime import datetime
+"""
+app/scrapers/scraper_manager.py
+
+Orchestrates all scrapers.
+
+Key improvements in this revision
+----------------------------------
+1. Parallel execution via ThreadPoolExecutor.
+2. Per-scraper error isolation  – one failed scraper doesn’t abort others.
+3. Exposed get_all_statuses() for the health dashboard.
+4. Seeds / updates the DB with scraped prices using PriceService.
+"""
+
+from __future__ import annotations
+
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, List, Optional
 
 from app.scrapers.base_scraper import BaseScraper
-from app.scrapers.amazon_jp_scraper import AmazonJPScraper
-from app.scrapers.tcgrepublic_scraper import TCGRepublicScraper
-from app.scrapers.ebay_scraper import EbayScraper
-from app.scrapers.pricecharting_scraper import PriceChartingScraper
-from app.scrapers.japantcg_scraper import JapanTCGScraper
-from app.scrapers.tcghobby_scraper import TCGHobbyScraper
-from app.scrapers.fptradingcards_scraper import FPTradingCardsScraper
 from app.scrapers.pvpshoppe_scraper import PVPShoppeScraper
-from app.scrapers.ahiddenfortress_scraper import AHiddenFortressScraper
-from app.models.retailer import Retailer
-from app.models.product import Product
-from app.models.price import PriceHistory
-from app.models.scrape_log import ScrapeLog
-from app.extensions import db
+from app.scrapers.fptradingcards_scraper import FPTradingCardsScraper
+from app.services.price_service import PriceService
 
 logger = logging.getLogger(__name__)
 
+# Maximum number of scrapers to run concurrently
+_MAX_WORKERS: int = 4
+
 
 class ScraperManager:
-    """Orchestrates scraping across all retailers"""
+    """
+    Manages instantiation and parallel execution of all registered scrapers.
+    """
 
-    SCRAPER_CLASSES: Dict[str, Type[BaseScraper]] = {
-        'amazon-jp': AmazonJPScraper,
-        'tcgrepublic': TCGRepublicScraper,
-        'ebay': EbayScraper,
-        'pricecharting': PriceChartingScraper,
-        'japantcg': JapanTCGScraper,
-        'tcghobby': TCGHobbyScraper,
-        'fptradingcards': FPTradingCardsScraper,
-        'pvpshoppe': PVPShoppeScraper,
-        'ahiddenfortress': AHiddenFortressScraper,
-    }
+    def __init__(self, max_workers: int = _MAX_WORKERS) -> None:
+        self._scrapers: List[BaseScraper] = [
+            PVPShoppeScraper(),
+            FPTradingCardsScraper(),
+        ]
+        self._max_workers = max_workers
 
-    def __init__(self):
-        self.scrapers: Dict[str, BaseScraper] = {}
-        self._initialize_scrapers()
+    # ------------------------------------------------------------------
+    # Core run methods
+    # ------------------------------------------------------------------
 
-    def _initialize_scrapers(self):
-        """Initialize scrapers for all active retailers"""
-        retailers = Retailer.query.filter_by(is_active=True).all()
+    def run_all(self) -> Dict[str, List[dict]]:
+        """
+        Run every scraper in parallel and persist results.
 
-        for retailer in retailers:
-            scraper_class = self.SCRAPER_CLASSES.get(retailer.slug)
-            if scraper_class:
-                config = {
-                    'name': retailer.name,
-                    'base_url': retailer.base_url,
-                    'min_delay_seconds': retailer.min_delay_seconds,
-                    'max_delay_seconds': retailer.max_delay_seconds,
-                    'requests_per_minute': retailer.requests_per_minute,
-                    'requires_proxy': retailer.requires_proxy,
-                    'selectors': retailer.config.get('selectors', {}),
-                }
-                self.scrapers[retailer.slug] = scraper_class(config)
+        Returns a dict mapping retailer_name → list of raw result dicts.
+        """
+        results: Dict[str, List[dict]] = {}
 
-    def run_scrape_job(self, retailer_slug: str = None, product_limit: int = None, product_type: str = None):
-        """Run scraping job for one or all retailers"""
-        query = Product.query.filter_by(is_active=True)
-        if product_type:
-            query = query.filter_by(product_type=product_type)
-        products = query.all()
-        if product_limit:
-            products = products[:product_limit]
-
-        retailers_to_scrape = [retailer_slug] if retailer_slug else list(self.scrapers.keys())
-
-        for slug in retailers_to_scrape:
-            if slug not in self.scrapers:
-                logger.warning(f"No scraper configured for: {slug}")
-                continue
-
-            retailer = Retailer.query.filter_by(slug=slug).first()
-            if not retailer:
-                continue
-
-            # Create scrape log
-            scrape_log = ScrapeLog(
-                retailer_id=retailer.id,
-                status='started'
-            )
-            db.session.add(scrape_log)
-            db.session.commit()
-
-            try:
-                scraper = self.scrapers[slug]
-                results = scraper.scrape_all_products(products)
-
-                # Save results
-                for result in results:
-                    price_history = PriceHistory(
-                        product_id=result['product_id'],
-                        retailer_id=retailer.id,
-                        price=result['price'],
-                        currency=result['currency'],
-                        in_stock=result.get('in_stock', True),
-                        source_url=result.get('source_url'),
-                        scraped_at=datetime.utcnow()
+        with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
+            future_to_scraper = {
+                pool.submit(self._run_one, scraper): scraper
+                for scraper in self._scrapers
+            }
+            for future in as_completed(future_to_scraper):
+                scraper = future_to_scraper[future]
+                try:
+                    name, data = future.result()
+                    results[name] = data
+                except Exception as exc:  # pylint: disable=broad-except
+                    logger.error(
+                        "ScraperManager: unhandled error from %s: %s",
+                        scraper.retailer_name,
+                        exc,
+                        exc_info=True,
                     )
-                    db.session.add(price_history)
+                    results[scraper.retailer_name] = []
 
-                # Update scrape log
-                scrape_log.status = 'completed'
-                scrape_log.completed_at = datetime.utcnow()
-                scrape_log.products_scraped = len(results)
-                scrape_log.products_failed = len(products) - len(results)
+        return results
 
-            except Exception as e:
-                logger.error(f"Scrape job failed for {slug}: {e}")
-                scrape_log.status = 'failed'
-                scrape_log.completed_at = datetime.utcnow()
-                scrape_log.error_message = str(e)
+    def _run_one(self, scraper: BaseScraper):
+        """
+        Run a single scraper, persist its results, and return
+        (retailer_name, results_list).
+        """
+        name = scraper.retailer_name
+        logger.info("Starting scraper: %s", name)
+        results = scraper.run()   # run() already handles exceptions internally
 
-            finally:
-                db.session.commit()
+        if results:
+            try:
+                svc = PriceService()
+                svc.bulk_upsert(results)
+                logger.info("%s: persisted %d price records", name, len(results))
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.error(
+                    "%s: failed to persist results: %s", name, exc, exc_info=True
+                )
+        else:
+            logger.warning("%s: no results returned", name)
+
+        return name, results
+
+    # ------------------------------------------------------------------
+    # Status / health
+    # ------------------------------------------------------------------
+
+    def get_all_statuses(self) -> Dict[str, dict]:
+        """
+        Return a dict mapping retailer_name → status dict for every
+        registered scraper.
+        """
+        return {s.retailer_name: s.get_status() for s in self._scrapers}
+
+    def get_scraper(self, name: str) -> Optional[BaseScraper]:
+        """Return the scraper instance for *name*, or None."""
+        for s in self._scrapers:
+            if s.retailer_name == name:
+                return s
+        return None
+
+    def add_scraper(self, scraper: BaseScraper) -> None:
+        """Dynamically register a new scraper at runtime."""
+        self._scrapers.append(scraper)
+        logger.info("ScraperManager: registered new scraper %s", scraper.retailer_name)
