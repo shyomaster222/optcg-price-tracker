@@ -161,6 +161,28 @@ def seed_missing_products():
     return jsonify({"added": added, "total_products": Product.query.count()})
 
 
+@admin_bp.route("/seed-fuji", methods=["POST"])
+def seed_fuji():
+    existing = Retailer.query.filter_by(slug="fujicardshop").first()
+    if existing:
+        return jsonify({"status": "already_exists", "id": existing.id})
+    from app.extensions import db as _db
+    retailer = Retailer(
+        name="FujiCardShop",
+        slug="fujicardshop",
+        base_url="https://www.fujicardshop.com",
+        country="US",
+        currency="USD",
+        min_delay_seconds=2,
+        max_delay_seconds=4,
+        requests_per_minute=10,
+        is_active=True,
+    )
+    _db.session.add(retailer)
+    _db.session.commit()
+    return jsonify({"status": "created", "id": retailer.id, "name": retailer.name})
+
+
 @admin_bp.route("/seed-rcj", methods=["POST"])
 def seed_rcj():
     existing = Retailer.query.filter_by(slug="rarecardsjapan").first()

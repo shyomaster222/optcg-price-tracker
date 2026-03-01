@@ -27,6 +27,7 @@ from app.scrapers.base_scraper import BaseScraper
 from app.scrapers.pvpshoppe_scraper import PVPShoppeScraper
 from app.scrapers.fptradingcards_scraper import FPTradingCardsScraper
 from app.scrapers.rarecardsjapan_scraper import RareCardsJapanScraper
+from app.scrapers.fujicardshop_scraper import FujiCardShopScraper
 from app.services.price_service import PriceService
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ class ScraperManager:
             PVPShoppeScraper(),
             FPTradingCardsScraper(),
             RareCardsJapanScraper(),
+            FujiCardShopScraper(),
         ]
         self._max_workers = max_workers
 
