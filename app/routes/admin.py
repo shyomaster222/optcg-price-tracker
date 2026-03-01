@@ -131,10 +131,12 @@ def debug_fuji():
         return jsonify({
             "status_code": resp.status_code,
             "content_type": resp.headers.get("Content-Type"),
+            "content_encoding": resp.headers.get("Content-Encoding"),
+            "request_accept_encoding": scraper._get_headers().get("Accept-Encoding"),
             "html_length": len(resp.text),
             "product_elements_found": len(items),
             "first_5": titles,
-            "raw_snippet": resp.text[2000:2500],
+            "raw_snippet": resp.text[:500],
         })
     except Exception as exc:
         return jsonify({"error": str(exc), "type": type(exc).__name__})
