@@ -8,25 +8,21 @@ For each product that has a RareCardsJapan price entry the report computes:
   - Average 24-hour market price (AVG price_usd from other retailers, last 24 h)
 
 Both are compared against RCJ's price_usd.  Products that deviate ± 5 % are
-flagged with a warning indicator.  The report is sent via Gmail SMTP using
-Python's stdlib smtplib + ssl — no extra dependencies.
+flagged with a warning indicator.  The report is sent via the Resend API
+(uses the existing `requests` dependency — no new packages needed).
 
 Environment variables required:
-  GMAIL_USER          – sender Gmail address
-  GMAIL_APP_PASSWORD  – Gmail App Password (not the account password)
-  COMPANY_EMAIL       – recipient address
+  RESEND_API_KEY  – API key from resend.com
+  COMPANY_EMAIL   – recipient address (also used as the From address)
 """
 
 from __future__ import annotations
 
 import logging
-import smtplib
-import ssl
 from datetime import datetime, timedelta
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from typing import List, Optional
 
+import requests
 from flask import current_app
 from sqlalchemy import func
 
@@ -254,15 +250,17 @@ def _build_html(report: dict) -> str:
 # Email sender
 # ---------------------------------------------------------------------------
 
-def send_report() -> None:
-    """Build and send the daily price comparison report via Gmail SMTP."""
-    gmail_user = current_app.config.get("GMAIL_USER")
-    gmail_password = current_app.config.get("GMAIL_APP_PASSWORD")
-    recipient = current_app.config.get("COMPANY_EMAIL")
+_RESEND_API_URL = "https://api.resend.com/emails"
 
-    if not all([gmail_user, gmail_password, recipient]):
+
+def send_report() -> None:
+    """Build and send the daily price comparison report via Resend."""
+    api_key = current_app.config.get("RESEND_API_KEY")
+    company_email = current_app.config.get("COMPANY_EMAIL")
+
+    if not all([api_key, company_email]):
         logger.warning(
-            "email_service: GMAIL_USER / GMAIL_APP_PASSWORD / COMPANY_EMAIL not configured; "
+            "email_service: RESEND_API_KEY / COMPANY_EMAIL not configured; "
             "skipping daily email"
         )
         return
@@ -274,20 +272,23 @@ def send_report() -> None:
     flagged = report["flagged"]
     subject = f"[OPTCG Price Report] {date_str} — {flagged} product{'s' if flagged != 1 else ''} flagged"
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = gmail_user
-    msg["To"] = recipient
-    msg.attach(MIMEText(html_body, "html"))
-
-    context = ssl.create_default_context()
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-            smtp.ehlo()
-            smtp.starttls(context=context)
-            smtp.login(gmail_user, gmail_password)
-            smtp.sendmail(gmail_user, recipient, msg.as_string())
-        logger.info("email_service: daily report sent to %s (%d flagged)", recipient, flagged)
+        response = requests.post(
+            _RESEND_API_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": f"OPTCG Tracker <{company_email}>",
+                "to": [company_email],
+                "subject": subject,
+                "html": html_body,
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        logger.info("email_service: daily report sent to %s (%d flagged)", company_email, flagged)
     except Exception as exc:
         logger.error("email_service: failed to send report: %s", exc, exc_info=True)
         raise
