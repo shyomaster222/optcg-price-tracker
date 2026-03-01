@@ -108,6 +108,63 @@ def _pct_diff(market_price: float, rcj_price: float) -> float:
     return (market_price - rcj_price) / rcj_price * 100
 
 
+def _latest_retailer_price(product_id: int, retailer_id: int) -> Optional[PriceHistory]:
+    return (
+        PriceHistory.query
+        .filter_by(product_id=product_id, retailer_id=retailer_id)
+        .order_by(PriceHistory.scraped_at.desc())
+        .first()
+    )
+
+
+def _build_fuji_rows(rcj_id: int) -> list:
+    """
+    Build rows comparing FujiCardShop vs RCJ for every product that has
+    a price from both retailers.
+    """
+    fuji = Retailer.query.filter_by(slug="fujicardshop").first()
+    if fuji is None:
+        return []
+
+    # Products that have a FujiCardShop price
+    products_with_fuji: List[Product] = (
+        db.session.query(Product)
+        .join(PriceHistory, PriceHistory.product_id == Product.id)
+        .filter(PriceHistory.retailer_id == fuji.id)
+        .distinct()
+        .all()
+    )
+
+    rows = []
+    for product in products_with_fuji:
+        rcj_entry = _latest_retailer_price(product.id, rcj_id)
+        fuji_entry = _latest_retailer_price(product.id, fuji.id)
+
+        if rcj_entry is None or rcj_entry.price_usd is None:
+            continue
+        if fuji_entry is None:
+            continue
+
+        fuji_price = float(
+            fuji_entry.price_usd if fuji_entry.price_usd is not None else fuji_entry.price
+        )
+        rcj_price = float(rcj_entry.price_usd)
+        diff = _pct_diff(fuji_price, rcj_price)
+        flagged = abs(diff) >= _THRESHOLD_PCT
+
+        name = product.display_name if hasattr(product, "display_name") else f"{product.set_code} {product.product_type}"
+        rows.append({
+            "product": name,
+            "rcj_price_usd": rcj_price,
+            "fuji_price_usd": fuji_price,
+            "diff": diff,
+            "flagged": flagged,
+        })
+
+    rows.sort(key=lambda r: (not r["flagged"], r["product"]))
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Report builder
 # ---------------------------------------------------------------------------
@@ -174,11 +231,17 @@ def _build_report() -> dict:
     rows.sort(key=lambda r: (not r["flagged"], r["product"]))
 
     flagged_count = sum(1 for r in rows if r["flagged"])
+
+    fuji_rows = _build_fuji_rows(rcj.id)
+    fuji_flagged = sum(1 for r in fuji_rows if r["flagged"])
+
     return {
         "date": datetime.utcnow().strftime("%Y-%m-%d"),
         "rows": rows,
         "flagged": flagged_count,
         "total": len(rows),
+        "fuji_rows": fuji_rows,
+        "fuji_flagged": fuji_flagged,
     }
 
 
@@ -205,14 +268,13 @@ def _build_html(report: dict) -> str:
     total = report["total"]
     within = total - flagged
 
+    # --- Table 1: all-competitor summary ---
     rows_html = ""
     for row in report["rows"]:
         bg = "#fde8e8" if row["flagged"] else "#e8fde8"
         status = "⚠️ Flagged" if row["flagged"] else "✓ OK"
-
         cheap_diff_str = _fmt_pct(row["cheap_diff"])
         avg_diff_str = _fmt_pct(row["avg_diff"])
-
         rows_html += f"""
         <tr style="background:{bg};">
           <td style="padding:8px;border:1px solid #ddd;">{row['product']}</td>
@@ -230,11 +292,38 @@ def _build_html(report: dict) -> str:
     if not rows_html:
         rows_html = '<tr><td colspan="7" style="padding:16px;text-align:center;color:#666;">No data available</td></tr>'
 
+    # --- Table 2: FujiCardShop vs RCJ ---
+    fuji_rows = report.get("fuji_rows", [])
+    fuji_flagged = report.get("fuji_flagged", 0)
+    fuji_within = len(fuji_rows) - fuji_flagged
+
+    fuji_rows_html = ""
+    for row in fuji_rows:
+        bg = "#fde8e8" if row["flagged"] else "#e8fde8"
+        status = "⚠️ Flagged" if row["flagged"] else "✓ OK"
+        diff_str = _fmt_pct(row["diff"])
+        diff_style = "color:#c00;font-weight:bold;" if row["flagged"] else ""
+        fuji_rows_html += f"""
+        <tr style="background:{bg};">
+          <td style="padding:8px;border:1px solid #ddd;">{row['product']}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">{_fmt_usd(row['rcj_price_usd'])}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">{_fmt_usd(row['fuji_price_usd'])}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;{diff_style}">{diff_str}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:center;">{status}</td>
+        </tr>"""
+
+    if not fuji_rows_html:
+        fuji_rows_html = '<tr><td colspan="5" style="padding:16px;text-align:center;color:#666;">No FujiCardShop data available</td></tr>'
+
+    fuji_summary = f"<strong>{fuji_within}</strong> within 5% &nbsp;|&nbsp; <strong style=\"color:#c00;\">{fuji_flagged}</strong> flagged &nbsp;|&nbsp; {len(fuji_rows)} total"
+
     return f"""<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:Arial,sans-serif;color:#222;max-width:900px;margin:auto;padding:24px;">
   <h2 style="color:#333;">OPTCG Daily Price Report — {date}</h2>
+
+  <h3 style="color:#444;margin-top:24px;">Market Overview (All Competitors vs RCJ)</h3>
   <p style="background:#f5f5f5;padding:12px;border-radius:4px;">
     <strong>{within}</strong> products within 5% &nbsp;|&nbsp;
     <strong style="color:#c00;">{flagged}</strong> products flagged (&gt;±5%)
@@ -247,7 +336,7 @@ def _build_html(report: dict) -> str:
         <th style="padding:10px;border:1px solid #555;">RCJ Price (USD)</th>
         <th style="padding:10px;border:1px solid #555;">Cheapest Competitor</th>
         <th style="padding:10px;border:1px solid #555;">% Diff</th>
-        <th style="padding:10px;border:1px solid #555;">Avg Market (24h)</th>
+        <th style="padding:10px;border:1px solid #555;">Avg Market</th>
         <th style="padding:10px;border:1px solid #555;">% Diff</th>
         <th style="padding:10px;border:1px solid #555;">Status</th>
       </tr>
@@ -256,9 +345,26 @@ def _build_html(report: dict) -> str:
       {rows_html}
     </tbody>
   </table>
+
+  <h3 style="color:#444;margin-top:32px;">FujiCardShop vs RCJ</h3>
+  <p style="background:#f5f5f5;padding:12px;border-radius:4px;">{fuji_summary}</p>
+  <table style="border-collapse:collapse;width:100%;font-size:14px;">
+    <thead>
+      <tr style="background:#1a5276;color:#fff;">
+        <th style="padding:10px;border:1px solid #555;text-align:left;">Product</th>
+        <th style="padding:10px;border:1px solid #555;">RCJ Price (USD)</th>
+        <th style="padding:10px;border:1px solid #555;">Fuji Price (USD)</th>
+        <th style="padding:10px;border:1px solid #555;">% Diff (Fuji vs RCJ)</th>
+        <th style="padding:10px;border:1px solid #555;">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {fuji_rows_html}
+    </tbody>
+  </table>
+
   <p style="margin-top:20px;color:#666;font-size:12px;">
-    All prices in USD. Non-USD retailer prices converted at current exchange rates.
-    Market average uses prices recorded in the last 24 hours.
+    All prices in USD. % Diff = (Fuji − RCJ) / RCJ × 100. Flagged when |diff| ≥ 5%.
   </p>
 </body>
 </html>"""
