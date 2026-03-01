@@ -80,6 +80,7 @@ class ScraperManager:
         Run a single scraper, persist its results, and return
         (retailer_name, results_list).
         """
+        from flask import current_app
         from app.models.product import Product
         from app.models.retailer import Retailer
 
@@ -89,42 +90,46 @@ class ScraperManager:
 
         if results:
             try:
-                # Resolve retailer_id — try slug first (reliable), then name
-                slug = getattr(scraper, "retailer_slug", None)
-                if slug:
-                    retailer = Retailer.query.filter_by(slug=slug).first()
-                else:
-                    retailer = Retailer.query.filter_by(name=name).first()
-                if retailer is None:
-                    logger.error("%s: retailer not found in DB; skipping persist", name)
-                    return name, results
+                # ThreadPoolExecutor threads don't inherit Flask app context;
+                # push one so DB queries work correctly.
+                app = current_app._get_current_object()
+                with app.app_context():
+                    # Resolve retailer_id — try slug first (reliable), then name
+                    slug = getattr(scraper, "retailer_slug", None)
+                    if slug:
+                        retailer = Retailer.query.filter_by(slug=slug).first()
+                    else:
+                        retailer = Retailer.query.filter_by(name=name).first()
+                    if retailer is None:
+                        logger.error("%s: retailer not found in DB; skipping persist", name)
+                        return name, results
 
-                # Build a lookup cache: (set_code, product_type) -> product_id
-                product_cache: dict = {}
-                for rec in results:
-                    key = (rec.get("set_code", ""), rec.get("product_type", "box"))
-                    if key not in product_cache:
-                        product = Product.query.filter_by(
-                            set_code=key[0], product_type=key[1]
-                        ).first()
-                        product_cache[key] = product.id if product else None
+                    # Build a lookup cache: (set_code, product_type) -> product_id
+                    product_cache: dict = {}
+                    for rec in results:
+                        key = (rec.get("set_code", ""), rec.get("product_type", "box"))
+                        if key not in product_cache:
+                            product = Product.query.filter_by(
+                                set_code=key[0], product_type=key[1]
+                            ).first()
+                            product_cache[key] = product.id if product else None
 
-                # Inject IDs and filter out unresolvable records
-                enriched = []
-                for rec in results:
-                    key = (rec.get("set_code", ""), rec.get("product_type", "box"))
-                    pid = product_cache.get(key)
-                    if pid is None:
-                        logger.debug("%s: no product for %s; skipping", name, key)
-                        continue
-                    enriched.append({**rec, "product_id": pid, "retailer_id": retailer.id})
+                    # Inject IDs and filter out unresolvable records
+                    enriched = []
+                    for rec in results:
+                        key = (rec.get("set_code", ""), rec.get("product_type", "box"))
+                        pid = product_cache.get(key)
+                        if pid is None:
+                            logger.debug("%s: no product for %s; skipping", name, key)
+                            continue
+                        enriched.append({**rec, "product_id": pid, "retailer_id": retailer.id})
 
-                if enriched:
-                    svc = PriceService()
-                    svc.bulk_upsert(enriched)
-                    logger.info("%s: persisted %d price records", name, len(enriched))
-                else:
-                    logger.warning("%s: no records matched known products", name)
+                    if enriched:
+                        svc = PriceService()
+                        svc.bulk_upsert(enriched)
+                        logger.info("%s: persisted %d price records", name, len(enriched))
+                    else:
+                        logger.warning("%s: no records matched known products", name)
             except Exception as exc:  # pylint: disable=broad-except
                 logger.error(
                     "%s: failed to persist results: %s", name, exc, exc_info=True
