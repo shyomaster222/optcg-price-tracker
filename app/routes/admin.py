@@ -90,14 +90,15 @@ def trigger_scraper():
 
 @admin_bp.route("/debug-rcj")
 def debug_rcj():
-    import requests as req
+    from app.scrapers.rarecardsjapan_scraper import RareCardsJapanScraper
+    scraper = RareCardsJapanScraper()
     url = "https://www.rarecardsjapan.com/collections/booster-boxes/products.json?limit=5"
     try:
-        resp = req.get(url, timeout=15, headers={"Accept": "application/json"})
+        resp = scraper.fetch(url)
         return jsonify({
             "status_code": resp.status_code,
             "content_type": resp.headers.get("content-type"),
             "body_preview": resp.text[:500],
         })
     except Exception as exc:
-        return jsonify({"error": str(exc)})
+        return jsonify({"error": str(exc), "type": type(exc).__name__})
