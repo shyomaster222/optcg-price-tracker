@@ -162,21 +162,33 @@ def seed_rcj():
 
 @admin_bp.route("/debug-db")
 def debug_db():
+    from app.models.product import Product
+    from sqlalchemy import distinct
     retailers = Retailer.query.all()
     retailer_info = [{"id": r.id, "name": r.name, "slug": r.slug} for r in retailers]
     rcj = Retailer.query.filter_by(slug="rarecardsjapan").first()
     rcj_price_count = (
         PriceHistory.query.filter_by(retailer_id=rcj.id).count() if rcj else 0
     )
-    from app.models.product import Product
-    product_count = Product.query.count()
-    sample_products = [
-        {"id": p.id, "set_code": p.set_code, "product_type": p.product_type}
-        for p in Product.query.limit(5).all()
+    all_products = Product.query.order_by(Product.set_code, Product.product_type).all()
+    # Which products have RCJ prices?
+    rcj_product_ids = set()
+    if rcj:
+        rows = PriceHistory.query.filter_by(retailer_id=rcj.id).with_entities(PriceHistory.product_id).distinct().all()
+        rcj_product_ids = {r[0] for r in rows}
+    product_coverage = [
+        {
+            "set_code": p.set_code,
+            "product_type": p.product_type,
+            "has_rcj_price": p.id in rcj_product_ids,
+        }
+        for p in all_products
     ]
+    missing = [p for p in product_coverage if not p["has_rcj_price"]]
     return jsonify({
-        "retailers": retailer_info,
-        "product_count": product_count,
-        "sample_products": sample_products,
+        "retailers": len(retailer_info),
+        "total_products": len(all_products),
         "rcj_price_rows": rcj_price_count,
+        "products_with_rcj_price": len(rcj_product_ids),
+        "missing_rcj_price": missing,
     })
