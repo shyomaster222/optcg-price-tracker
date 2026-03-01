@@ -13,9 +13,15 @@ Key improvements in this revision
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
+
+
+@contextlib.contextmanager
+def _DummyContext():
+    yield
 
 from app.scrapers.base_scraper import BaseScraper
 from app.scrapers.pvpshoppe_scraper import PVPShoppeScraper
@@ -52,11 +58,17 @@ class ScraperManager:
 
         Returns a dict mapping retailer_name → list of raw result dicts.
         """
+        from flask import current_app
+
+        # Capture the real Flask app object now (while we're in a request context)
+        # so worker threads can push their own app contexts.
+        flask_app = current_app._get_current_object()
+
         results: Dict[str, List[dict]] = {}
 
         with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
             future_to_scraper = {
-                pool.submit(self._run_one, scraper): scraper
+                pool.submit(self._run_one, scraper, flask_app): scraper
                 for scraper in self._scrapers
             }
             for future in as_completed(future_to_scraper):
@@ -75,12 +87,11 @@ class ScraperManager:
 
         return results
 
-    def _run_one(self, scraper: BaseScraper):
+    def _run_one(self, scraper: BaseScraper, flask_app=None):
         """
         Run a single scraper, persist its results, and return
         (retailer_name, results_list).
         """
-        from flask import current_app
         from app.models.product import Product
         from app.models.retailer import Retailer
 
@@ -90,10 +101,9 @@ class ScraperManager:
 
         if results:
             try:
-                # ThreadPoolExecutor threads don't inherit Flask app context;
-                # push one so DB queries work correctly.
-                app = current_app._get_current_object()
-                with app.app_context():
+                # Worker threads don't have a Flask app context; use the one
+                # captured in run_all (from the originating request context).
+                with (flask_app.app_context() if flask_app else _DummyContext()):
                     # Resolve retailer_id — try slug first (reliable), then name
                     slug = getattr(scraper, "retailer_slug", None)
                     if slug:
