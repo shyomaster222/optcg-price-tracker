@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+
+{% block title %}Scraper Health Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <h1 class="h3 mb-1">Scraper Health Dashboard</h1>
+  <p class="text-muted small mb-4">
+    Auto-refreshes every 60 s &mdash;
+    <span id="last-refresh">loaded at {{ moment().format('HH:mm:ss') if moment else 'page load' }}</span>
+  </p>
+
+  <!-- Summary bar -->
+  {% set total   = statuses | length %}
+  {% set healthy = statuses.values() | selectattr('consecutive_failures', 'equalto', 0) | list | length %}
+  {% set failing = total - healthy %}
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card text-bg-secondary h-100">
+        <div class="card-body">
+          <div class="fs-2 fw-bold">{{ total }}</div>
+          <div class="small">Total scrapers</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card text-bg-success h-100">
+        <div class="card-body">
+          <div class="fs-2 fw-bold">{{ healthy }}</div>
+          <div class="small">Healthy</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card {% if failing > 0 %}text-bg-danger{% else %}text-bg-secondary{% endif %} h-100">
+        <div class="card-body">
+          <div class="fs-2 fw-bold">{{ failing }}</div>
+          <div class="small">Failing</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card text-bg-info h-100">
+        <div class="card-body">
+          <div class="fs-2 fw-bold" id="total-prices-24h">
+            {{ statuses.values() | sum(attribute='prices_last_24h') }}
+          </div>
+          <div class="small">Prices scraped (24 h)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-scraper table -->
+  <div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold">Scraper Status</span>
+      <button class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
+        &#x21bb; Refresh
+      </button>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Scraper</th>
+            <th>Status</th>
+            <th>Last Run</th>
+            <th>Last Success</th>
+            <th>Consecutive Failures</th>
+            <th>Prices (24 h)</th>
+            <th>Recent Errors</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for name, s in statuses.items() | sort %}
+          {% set is_ok = s.consecutive_failures == 0 %}
+          <tr class="{% if not is_ok %}table-danger{% endif %}">
+            <td class="fw-semibold">{{ name }}</td>
+            <td>
+              {% if is_ok %}
+                <span class="badge text-bg-success">OK</span>
+              {% else %}
+                <span class="badge text-bg-danger">FAILING ({{ s.consecutive_failures }})</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">
+              {% if s.last_run %}
+                {{ s.last_run.strftime('%Y-%m-%d %H:%M') if s.last_run is not string else s.last_run[:16] }}
+              {% else %}&mdash;{% endif %}
+            </td>
+            <td class="text-muted small">
+              {% if s.last_success %}
+                {{ s.last_success.strftime('%Y-%m-%d %H:%M') if s.last_success is not string else s.last_success[:16] }}
+              {% else %}&mdash;{% endif %}
+            </td>
+            <td class="text-center">
+              {% if s.consecutive_failures == 0 %}
+                <span class="text-success">0</span>
+              {% else %}
+                <span class="text-danger fw-bold">{{ s.consecutive_failures }}</span>
+              {% endif %}
+            </td>
+            <td class="text-center">{{ s.prices_last_24h }}</td>
+            <td>
+              {% if s.recent_errors %}
+                <ul class="mb-0 ps-3 small text-danger">
+                  {% for err in s.recent_errors[-3:] %}
+                    <li>{{ err }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <span class="text-muted small">None</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Raw JSON link -->
+  <p class="mt-3 text-muted small">
+    Raw JSON: <a href="/admin/health/json" target="_blank">/admin/health/json</a>
+  </p>
+
+</div>
+
+<!-- Auto-refresh -->
+<script>
+  (function () {
+    var interval = 60 * 1000;   // 60 s
+    var countdown = interval / 1000;
+
+    setInterval(function () {
+      location.reload();
+    }, interval);
+
+    // Optional: tick a "next refresh in X s" counter
+    var el = document.getElementById('last-refresh');
+    if (el) {
+      setInterval(function () {
+        countdown -= 1;
+        if (countdown <= 0) countdown = interval / 1000;
+        el.textContent = 'refreshing in ' + countdown + ' s';
+      }, 1000);
+    }
+  })();
+</script>
+{% endblock %}

@@ -1,102 +1,125 @@
+"""
+app/__init__.py
+
+Flask application factory.
+
+Changes in this revision
+------------------------
+- Register export_bp  (GET /api/export/...)
+- Register alerts_bp  (GET|POST|DELETE /api/alerts)
+- Register admin_bp   (GET /admin/health, /admin/health/json, /admin/ping)
+- Schedule weekly archival task via APScheduler
+- Schedule alert evaluation every 15 minutes
+"""
+
+from __future__ import annotations
+
+import logging
 import os
+
 from flask import Flask
-from app.config import config
-from app.extensions import db, migrate
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+
+logger = logging.getLogger(__name__)
+
+db = SQLAlchemy()
+migrate = Migrate()
 
 
-def create_app(config_name=None):
-    """Application factory"""
-    if config_name is None:
-        config_name = os.environ.get('FLASK_ENV', 'development')
-
+def create_app(config_name: str = "default") -> Flask:
     app = Flask(__name__)
+
+    # ------------------------------------------------------------------
+    # Configuration
+    # ------------------------------------------------------------------
+    from app.config import config
     app.config.from_object(config[config_name])
 
-    # Initialize extensions
+    # ------------------------------------------------------------------
+    # Extensions
+    # ------------------------------------------------------------------
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # Register blueprints
+    # ------------------------------------------------------------------
+    # Blueprints
+    # ------------------------------------------------------------------
     from app.routes.main import main_bp
     from app.routes.api import api_bp
+    from app.routes.api_export import export_bp
+    from app.routes.api_alerts import alerts_bp
+    from app.routes.admin import admin_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(export_bp)
+    app.register_blueprint(alerts_bp)
+    app.register_blueprint(admin_bp)
 
-    # Create database tables and seed if empty
-    with app.app_context():
-        db.create_all()
-        _seed_if_empty()
-
-    # Initialize in-process scheduler only when not using external cron (e.g. Railway Cron)
-    if os.environ.get('ENABLE_IN_PROCESS_SCHEDULER', 'true').lower() == 'true':
-        from app.tasks.scheduler import init_scheduler
-        init_scheduler(app)
+    # ------------------------------------------------------------------
+    # Scheduler  (APScheduler)
+    # ------------------------------------------------------------------
+    _start_scheduler(app)
 
     return app
 
 
-def _seed_if_empty():
-    """Seed database with products and retailers if empty"""
-    from app.models.product import Product
-    from app.models.retailer import Retailer
-    from datetime import date
-
-    # Check if already seeded
-    if Product.query.first() is not None:
+def _start_scheduler(app: Flask) -> None:
+    """
+    Start APScheduler with:
+      - scraping job    : every 6 hours
+      - alert eval job  : every 15 minutes
+      - archival job    : every Sunday at 02:00 UTC
+    """
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.cron import CronTrigger
+        from apscheduler.triggers.interval import IntervalTrigger
+    except ImportError:
+        logger.warning("APScheduler not installed; background jobs disabled")
         return
 
-    print("Seeding database with products and retailers...")
+    scheduler = BackgroundScheduler()
 
-    # Retailers
-    retailers_data = [
-        {"name": "Amazon Japan", "slug": "amazon-jp", "base_url": "https://www.amazon.co.jp", "country": "JP", "currency": "JPY", "min_delay_seconds": 3, "max_delay_seconds": 6, "requests_per_minute": 8},
-        {"name": "TCGRepublic", "slug": "tcgrepublic", "base_url": "https://tcgrepublic.com", "country": "JP", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
-        {"name": "eBay", "slug": "ebay", "base_url": "https://www.ebay.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 15},
-        {"name": "PriceCharting", "slug": "pricecharting", "base_url": "https://www.pricecharting.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 10},
-        {"name": "Japan TCG Store", "slug": "japantcg", "base_url": "https://japantradingcardstore.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
-        {"name": "TCG Hobby", "slug": "tcghobby", "base_url": "https://tcghobby.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
-        {"name": "FP Trading Cards", "slug": "fptradingcards", "base_url": "https://www.fptradingcards.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
-        {"name": "PVP Shoppe", "slug": "pvpshoppe", "base_url": "https://pvpshoppe.com", "country": "CA", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
-        {"name": "A Hidden Fortress", "slug": "ahiddenfortress", "base_url": "https://www.ahiddenfortress.com", "country": "US", "currency": "USD", "min_delay_seconds": 2, "max_delay_seconds": 4, "requests_per_minute": 12},
-    ]
+    # -- Scraping ----------------------------------------------------------
+    def _scrape_job():
+        with app.app_context():
+            from app.scrapers.scraper_manager import ScraperManager
+            ScraperManager().run_all()
 
-    for r in retailers_data:
-        db.session.add(Retailer(**r))
+    scheduler.add_job(
+        _scrape_job,
+        trigger=IntervalTrigger(hours=6),
+        id="scraping",
+        replace_existing=True,
+    )
 
-    # Products
-    sets_data = [
-        {"set_code": "OP-01", "set_name": "ROMANCE DAWN", "release_date": date(2022, 12, 2), "msrp_jpy": 6600},
-        {"set_code": "OP-02", "set_name": "PARAMOUNT WAR", "release_date": date(2023, 3, 10), "msrp_jpy": 6600},
-        {"set_code": "OP-03", "set_name": "PILLARS OF STRENGTH", "release_date": date(2023, 6, 30), "msrp_jpy": 6600},
-        {"set_code": "OP-04", "set_name": "KINGDOMS OF INTRIGUE", "release_date": date(2023, 9, 22), "msrp_jpy": 6600},
-        {"set_code": "OP-05", "set_name": "AWAKENING OF THE NEW ERA", "release_date": date(2023, 12, 2), "msrp_jpy": 6600},
-        {"set_code": "OP-06", "set_name": "WINGS OF THE CAPTAIN", "release_date": date(2024, 3, 15), "msrp_jpy": 6600},
-        {"set_code": "OP-07", "set_name": "500 YEARS IN THE FUTURE", "release_date": date(2024, 6, 28), "msrp_jpy": 6600},
-        {"set_code": "OP-08", "set_name": "TWO LEGENDS", "release_date": date(2024, 9, 13), "msrp_jpy": 6600},
-        {"set_code": "OP-09", "set_name": "EMPERORS IN THE NEW WORLD", "release_date": date(2024, 12, 13), "msrp_jpy": 6600},
-        {"set_code": "OP-10", "set_name": "ROYAL BLOOD", "release_date": date(2025, 3, 21), "msrp_jpy": 6600},
-        {"set_code": "OP-11", "set_name": "A FIST OF DIVINE SPEED", "release_date": date(2025, 6, 6), "msrp_jpy": 6600},
-        {"set_code": "OP-12", "set_name": "LEGACY OF THE MASTER", "release_date": date(2025, 8, 22), "msrp_jpy": 6600},
-        {"set_code": "OP-13", "set_name": "CARRYING ON HIS WILL", "release_date": date(2025, 11, 21), "msrp_jpy": 6600},
-        {"set_code": "OP-14", "set_name": "THE AZURE SEA'S SEVEN", "release_date": date(2026, 1, 16), "msrp_jpy": 6600},
-        {"set_code": "EB-01", "set_name": "MEMORIAL COLLECTION", "release_date": date(2024, 1, 27), "msrp_jpy": 6600},
-        {"set_code": "EB-02", "set_name": "ANIME 25TH COLLECTION", "release_date": date(2024, 10, 26), "msrp_jpy": 6600},
-        {"set_code": "EB-03", "set_name": "HEROINES EDITION", "release_date": date(2025, 5, 24), "msrp_jpy": 6600},
-        {"set_code": "PRB-01", "set_name": "THE BEST", "release_date": date(2024, 5, 25), "msrp_jpy": 8800},
-    ]
+    # -- Alert evaluation --------------------------------------------------
+    def _alert_job():
+        with app.app_context():
+            from app.services.alert_service import run_all_alerts
+            run_all_alerts()
 
-    for s in sets_data:
-        for product_type in ['box', 'case']:
-            db.session.add(Product(
-                set_code=s["set_code"],
-                set_name=s["set_name"],
-                release_date=s["release_date"],
-                msrp_jpy=s["msrp_jpy"],
-                product_type=product_type,
-                packs_per_box=24 if product_type == 'box' else None,
-                boxes_per_case=12 if product_type == 'case' else None
-            ))
+    scheduler.add_job(
+        _alert_job,
+        trigger=IntervalTrigger(minutes=15),
+        id="alert_evaluation",
+        replace_existing=True,
+    )
 
-    db.session.commit()
-    print(f"Seeded {Product.query.count()} products and {Retailer.query.count()} retailers")
+    # -- Archival ----------------------------------------------------------
+    def _archival_job():
+        with app.app_context():
+            from app.tasks.archival import run_archival_task
+            run_archival_task()
+
+    scheduler.add_job(
+        _archival_job,
+        trigger=CronTrigger(day_of_week="sun", hour=2, minute=0),
+        id="archival",
+        replace_existing=True,
+    )
+
+    scheduler.start()
+    logger.info("APScheduler started with scraping / alert-eval / archival jobs")
