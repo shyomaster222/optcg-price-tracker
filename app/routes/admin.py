@@ -239,6 +239,43 @@ def seed_rcj():
     return jsonify({"status": "created", "id": retailer.id, "name": retailer.name})
 
 
+@admin_bp.route("/debug-fuji-coverage")
+def debug_fuji_coverage():
+    from app.models.product import Product
+    fuji = Retailer.query.filter_by(slug="fujicardshop").first()
+    rcj = Retailer.query.filter_by(slug="rarecardsjapan").first()
+    if not fuji or not rcj:
+        return jsonify({"error": "retailer not found"})
+    fuji_product_ids = {
+        r[0] for r in
+        PriceHistory.query.filter_by(retailer_id=fuji.id)
+        .with_entities(PriceHistory.product_id).distinct().all()
+    }
+    rcj_product_ids = {
+        r[0] for r in
+        PriceHistory.query.filter_by(retailer_id=rcj.id)
+        .with_entities(PriceHistory.product_id).distinct().all()
+    }
+    products = Product.query.order_by(Product.set_code, Product.product_type).all()
+    coverage = [
+        {
+            "set_code": p.set_code,
+            "product_type": p.product_type,
+            "has_fuji": p.id in fuji_product_ids,
+            "has_rcj": p.id in rcj_product_ids,
+        }
+        for p in products
+    ]
+    missing_fuji = [c for c in coverage if not c["has_fuji"]]
+    return jsonify({
+        "total_products": len(products),
+        "with_fuji_price": len(fuji_product_ids),
+        "with_rcj_price": len(rcj_product_ids),
+        "in_both": len(fuji_product_ids & rcj_product_ids),
+        "missing_fuji": missing_fuji,
+    })
+
+
 @admin_bp.route("/debug-op05")
 def debug_op05():
     from app.models.product import Product
