@@ -140,15 +140,18 @@ def _build_fuji_rows(rcj_id: int) -> list:
         rcj_entry = _latest_retailer_price(product.id, rcj_id)
         fuji_entry = _latest_retailer_price(product.id, fuji.id)
 
-        if rcj_entry is None or rcj_entry.price_usd is None:
+        if rcj_entry is None:
             continue
         if fuji_entry is None:
             continue
 
-        fuji_price = float(
-            fuji_entry.price_usd if fuji_entry.price_usd is not None else fuji_entry.price
-        )
-        rcj_price = float(rcj_entry.price_usd)
+        rcj_price_raw = rcj_entry.price_usd if rcj_entry.price_usd is not None else rcj_entry.price
+        fuji_price_raw = fuji_entry.price_usd if fuji_entry.price_usd is not None else fuji_entry.price
+        if rcj_price_raw is None or fuji_price_raw is None:
+            continue
+
+        fuji_price = float(fuji_price_raw)
+        rcj_price = float(rcj_price_raw)
         diff = _pct_diff(fuji_price, rcj_price)
         flagged = abs(diff) >= _THRESHOLD_PCT
 
