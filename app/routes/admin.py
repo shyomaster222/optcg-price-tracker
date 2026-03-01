@@ -95,6 +95,8 @@ def trigger_report():
         "status": "ok",
         "report_rows": report["total"],
         "flagged": flagged,
+        "fuji_rows": len(report.get("fuji_rows", [])),
+        "fuji_flagged": report.get("fuji_flagged", 0),
         "to": company_email,
         "subject": subject,
         "resend_status": resp.status_code,
