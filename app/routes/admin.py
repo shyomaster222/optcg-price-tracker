@@ -93,10 +93,13 @@ def debug_rcj():
     from app.scrapers.rarecardsjapan_scraper import RareCardsJapanScraper
     scraper = RareCardsJapanScraper()
     try:
-        results = scraper.scrape()
+        currency = scraper._get_store_currency()
+        products = scraper._fetch_all_products()
+        titles = [p.get("title") for p in products]
         return jsonify({
-            "count": len(results),
-            "sample": results[:3],
+            "currency": currency,
+            "product_count": len(products),
+            "titles": titles,
         })
     except Exception as exc:
         return jsonify({"error": str(exc), "type": type(exc).__name__})
