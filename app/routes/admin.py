@@ -239,6 +239,34 @@ def seed_rcj():
     return jsonify({"status": "created", "id": retailer.id, "name": retailer.name})
 
 
+@admin_bp.route("/debug-fuji-rows")
+def debug_fuji_rows():
+    from app.models.product import Product
+    from app.services.email_service import _build_fuji_rows, _latest_retailer_price
+    rcj = Retailer.query.filter_by(slug="rarecardsjapan").first()
+    fuji = Retailer.query.filter_by(slug="fujicardshop").first()
+    if not rcj or not fuji:
+        return jsonify({"error": "retailer not found"})
+    # Check each product manually
+    products = Product.query.order_by(Product.set_code, Product.product_type).all()
+    result = []
+    for p in products:
+        rcj_entry = _latest_retailer_price(p.id, rcj.id)
+        fuji_entry = _latest_retailer_price(p.id, fuji.id)
+        result.append({
+            "set_code": p.set_code,
+            "product_type": p.product_type,
+            "rcj_price": float(rcj_entry.price) if rcj_entry else None,
+            "rcj_price_usd": float(rcj_entry.price_usd) if rcj_entry and rcj_entry.price_usd else None,
+            "fuji_price": float(fuji_entry.price) if fuji_entry else None,
+            "fuji_price_usd": float(fuji_entry.price_usd) if fuji_entry and fuji_entry.price_usd else None,
+        })
+    return jsonify({
+        "fuji_rows_count": len(_build_fuji_rows(rcj.id)),
+        "products": result
+    })
+
+
 @admin_bp.route("/debug-fuji-coverage")
 def debug_fuji_coverage():
     from app.models.product import Product
