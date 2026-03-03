@@ -54,19 +54,23 @@ def _latest_rcj_price(product_id: int, rcj_retailer_id: int) -> Optional[PriceHi
     )
 
 
-def _cheapest_competitor(product_id: int, exclude_retailer_id: int) -> Optional[float]:
-    """Return MIN(price_usd or price) from all retailers except the excluded one."""
+def _cheapest_competitor(product_id: int, exclude_retailer_id: int) -> tuple:
+    """Return (min_price_usd, retailer_name) from all retailers except the excluded one."""
     effective = func.coalesce(PriceHistory.price_usd, PriceHistory.price)
     result = (
-        db.session.query(func.min(effective))
+        db.session.query(effective, Retailer.name)
+        .join(Retailer, PriceHistory.retailer_id == Retailer.id)
         .filter(
             PriceHistory.product_id == product_id,
             PriceHistory.retailer_id != exclude_retailer_id,
             effective.isnot(None),
         )
-        .scalar()
+        .order_by(effective.asc())
+        .first()
     )
-    return float(result) if result is not None else None
+    if result is None:
+        return None, None
+    return float(result[0]), result[1]
 
 
 def _avg_market_price(product_id: int, exclude_retailer_id: int) -> Optional[float]:
@@ -207,7 +211,7 @@ def _build_report() -> dict:
         rcj_native = float(rcj_entry.price)
         rcj_currency = rcj_entry.currency or "USD"
 
-        cheapest = _cheapest_competitor(product.id, rcj.id)
+        cheapest, cheapest_retailer = _cheapest_competitor(product.id, rcj.id)
         avg_market = _avg_market_price(product.id, rcj.id)
 
         cheap_diff = _pct_diff(cheapest, rcj_price) if cheapest is not None else None
@@ -224,6 +228,7 @@ def _build_report() -> dict:
             "rcj_native": rcj_native,
             "rcj_currency": rcj_currency,
             "cheapest": cheapest,
+            "cheapest_retailer": cheapest_retailer,
             "cheap_diff": cheap_diff,
             "avg_market": avg_market,
             "avg_diff": avg_diff,
@@ -285,7 +290,10 @@ def _build_html(report: dict) -> str:
             {_fmt_usd(row['rcj_price_usd'])}
             <br><small style="color:#666;">({row['rcj_currency']} {row['rcj_native']:.2f})</small>
           </td>
-          <td style="padding:8px;border:1px solid #ddd;text-align:right;">{_fmt_usd(row['cheapest'])}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">
+            {_fmt_usd(row['cheapest'])}
+            {f'<br><small style="color:#666;">{row["cheapest_retailer"]}</small>' if row.get("cheapest_retailer") else ""}
+          </td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right;{'color:#c00;font-weight:bold;' if row['cheap_diff'] is not None and abs(row['cheap_diff']) >= _THRESHOLD_PCT else ''}">{cheap_diff_str}</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right;">{_fmt_usd(row['avg_market'])}</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right;{'color:#c00;font-weight:bold;' if row['avg_diff'] is not None and abs(row['avg_diff']) >= _THRESHOLD_PCT else ''}">{avg_diff_str}</td>
@@ -325,6 +333,11 @@ def _build_html(report: dict) -> str:
 <head><meta charset="utf-8"></head>
 <body style="font-family:Arial,sans-serif;color:#222;max-width:900px;margin:auto;padding:24px;">
   <h2 style="color:#333;">OPTCG Daily Price Report — {date}</h2>
+  <p style="margin-top:8px;">
+    <a href="https://web-production-d72a9.up.railway.app" style="color:#1a5276;font-size:14px;">
+      🔗 Open Dashboard
+    </a>
+  </p>
 
   <h3 style="color:#444;margin-top:24px;">Market Overview (All Competitors vs RCJ)</h3>
   <p style="background:#f5f5f5;padding:12px;border-radius:4px;">
