@@ -73,6 +73,15 @@ def ping():
     return jsonify({"status": "ok", "timestamp": datetime.utcnow().isoformat()})
 
 
+@admin_bp.route("/preview-email")
+def preview_email():
+    from app.services.email_service import _build_report, _build_html
+    from flask import Response
+    report = _build_report()
+    html = _build_html(report)
+    return Response(html, mimetype="text/html")
+
+
 @admin_bp.route("/send-report", methods=["POST"])
 def trigger_report():
     import requests as http_requests
