@@ -132,7 +132,7 @@ class RareCardsJapanScraper(BaseScraper):
 
     def scrape(self) -> List[dict]:
         """Scrape all One Piece booster products from rarecardsjapan.com."""
-        store_currency = self._get_store_currency()
+        store_currency = "USD"  # RCJ base currency is USD; /shop.json is unreliable due to Shopify geo-detection
         products = self._fetch_all_products()
         results: List[dict] = []
 
