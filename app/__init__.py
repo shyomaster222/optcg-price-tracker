@@ -131,5 +131,27 @@ def _start_scheduler(app: Flask) -> None:
         replace_existing=True,
     )
 
+    # -- Daily price sync (RCJ <- Fuji) ------------------------------------
+    def _price_sync_job():
+        with app.app_context():
+            try:
+                from app.extensions import db as _db
+                _db.create_all()  # ensure price_sync_log exists
+                from app.services.price_sync_service import run_price_sync
+                from app.services.email_service import send_price_sync_report
+                summary = run_price_sync()
+                # Only email when the feature is on (avoid noise while disabled).
+                if summary.get("enabled"):
+                    send_price_sync_report(summary)
+            except Exception:
+                logger.exception("price_sync job failed")
+
+    scheduler.add_job(
+        _price_sync_job,
+        trigger=CronTrigger(hour=4, minute=30),  # 30 min after the daily email; data is fresh
+        id="price_sync",
+        replace_existing=True,
+    )
+
     scheduler.start()
-    logger.info("APScheduler started with scraping / alert-eval / archival / daily-email jobs")
+    logger.info("APScheduler started with scraping / alert-eval / archival / daily-email / price-sync jobs")

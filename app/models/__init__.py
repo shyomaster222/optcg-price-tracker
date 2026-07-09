@@ -11,5 +11,6 @@ from app.models.retailer import Retailer
 from app.models.price import PriceHistory
 from app.models.scrape_log import ScrapeLog
 from app.models.alert import PriceAlert
+from app.models.price_sync_log import PriceSyncLog
 
-__all__ = ['Product', 'Retailer', 'PriceHistory', 'ScrapeLog', 'PriceAlert']
+__all__ = ['Product', 'Retailer', 'PriceHistory', 'ScrapeLog', 'PriceAlert', 'PriceSyncLog']

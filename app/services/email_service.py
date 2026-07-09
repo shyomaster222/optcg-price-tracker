@@ -393,6 +393,98 @@ def _build_html(report: dict) -> str:
 _RESEND_API_URL = "https://api.resend.com/emails"
 
 
+_DASHBOARD_URL = "https://web-production-d72a9.up.railway.app"
+
+
+def _price_sync_rows_html(results: list, actions: set) -> str:
+    rows = [r for r in results if r["action"] in actions]
+    if not rows:
+        return '<tr><td colspan="6" style="padding:12px;text-align:center;color:#666;">None</td></tr>'
+    html = ""
+    for r in rows:
+        html += f"""
+        <tr>
+          <td style="padding:8px;border:1px solid #ddd;">{r.get('set_code','')} {r.get('product_type','')}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">{_fmt_usd(r.get('current_price'))}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">{_fmt_usd(r.get('fuji_price'))}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:bold;">{_fmt_usd(r.get('target_price'))}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">{_fmt_pct((r['pct_change']*100) if r.get('pct_change') is not None else None)}</td>
+          <td style="padding:8px;border:1px solid #ddd;">{r.get('reason','')}</td>
+        </tr>"""
+    return html
+
+
+def _build_price_sync_html(summary: dict) -> str:
+    counts = summary.get("counts", {})
+    dry = summary.get("dry_run", True)
+    date = datetime.utcnow().strftime("%Y-%m-%d")
+    banner = ("⚠️ DRY RUN — no prices were changed on the store."
+              if dry else "✅ Live run — auto-approved prices were updated on the store.")
+
+    def table(title, actions, header_color):
+        return f"""
+      <h3 style="color:#444;margin-top:24px;">{title}</h3>
+      <table style="border-collapse:collapse;width:100%;font-size:14px;">
+        <thead><tr style="background:{header_color};color:#fff;">
+          <th style="padding:9px;border:1px solid #555;text-align:left;">Product</th>
+          <th style="padding:9px;border:1px solid #555;">Current</th>
+          <th style="padding:9px;border:1px solid #555;">Fuji</th>
+          <th style="padding:9px;border:1px solid #555;">Target</th>
+          <th style="padding:9px;border:1px solid #555;">Change</th>
+          <th style="padding:9px;border:1px solid #555;text-align:left;">Note</th>
+        </tr></thead>
+        <tbody>{_price_sync_rows_html(summary.get('results', []), actions)}</tbody>
+      </table>"""
+
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;color:#222;max-width:900px;margin:auto;padding:24px;">
+  <h2 style="color:#333;">RCJ Price Sync — {date}</h2>
+  <p style="background:#f5f5f5;padding:12px;border-radius:4px;">{banner}</p>
+  <p style="background:#f5f5f5;padding:12px;border-radius:4px;">
+    <strong>{counts.get('auto_applied', 0)}</strong> auto-applied &nbsp;|&nbsp;
+    <strong style="color:#c00;">{counts.get('held', 0)}</strong> held for review &nbsp;|&nbsp;
+    {counts.get('skipped', 0)} unchanged &nbsp;|&nbsp;
+    <strong style="color:#c00;">{counts.get('error', 0)}</strong> errors
+  </p>
+  <p><a href="{_DASHBOARD_URL}/admin/price-review" style="color:#1a5276;">🔗 Open the review page to apply held changes</a></p>
+  {table("Held for your review (change > tolerance or below floor)", {"held"}, "#c0392b")}
+  {table("Auto-applied", {"auto_applied"}, "#1a5276")}
+  {table("Errors", {"error"}, "#7d3c98")}
+  <p style="margin-top:20px;color:#666;font-size:12px;">
+    Target = Fuji − undercut%. Held items are never changed automatically; apply them from the review page.
+  </p>
+</body></html>"""
+
+
+def send_price_sync_report(summary: dict) -> None:
+    """Send the price-sync summary + review email via Resend."""
+    api_key = current_app.config.get("RESEND_API_KEY")
+    company_email = current_app.config.get("COMPANY_EMAIL")
+    if not all([api_key, company_email]):
+        logger.warning("email_service: RESEND_API_KEY / COMPANY_EMAIL not configured; skipping price-sync email")
+        return
+
+    counts = summary.get("counts", {})
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    tag = "DRY RUN" if summary.get("dry_run", True) else "LIVE"
+    subject = (f"[RCJ Price Sync {tag}] {date_str} — "
+               f"{counts.get('auto_applied', 0)} applied, {counts.get('held', 0)} to review")
+    html_body = _build_price_sync_html(summary)
+    try:
+        response = requests.post(
+            _RESEND_API_URL,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"from": f"RCJ Price Sync <{company_email}>", "to": [company_email],
+                  "subject": subject, "html": html_body},
+            timeout=15,
+        )
+        response.raise_for_status()
+        logger.info("email_service: price-sync report sent to %s", company_email)
+    except Exception as exc:
+        logger.error("email_service: failed to send price-sync report: %s", exc, exc_info=True)
+
+
 def send_report() -> None:
     """Build and send the daily price comparison report via Resend."""
     api_key = current_app.config.get("RESEND_API_KEY")
