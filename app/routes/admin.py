@@ -264,6 +264,28 @@ def price_review():
     return Response(html, mimetype="text/html")
 
 
+@admin_bp.route("/debug-rcj-admin")
+def debug_rcj_admin():
+    """Diagnose why the RCJ Admin-API scraper returns nothing on Railway."""
+    from app.scrapers.rarecardsjapan_scraper import RareCardsJapanScraper
+    from app.services import rcj_shopify
+    import os
+    out = {"has_token_env": bool(os.environ.get("SHOPIFY_ADMIN_TOKEN")),
+           "shop_env": os.environ.get("SHOPIFY_SHOP")}
+    try:
+        prods = rcj_shopify.fetch_products_admin()
+        out["products_admin_count"] = len(prods)
+        out["sample"] = prods[:2]
+    except Exception as e:
+        out["fetch_error"] = f"{type(e).__name__}: {str(e)[:300]}"
+    try:
+        recs = RareCardsJapanScraper().scrape()
+        out["scrape_count"] = len(recs)
+    except Exception as e:
+        out["scrape_error"] = f"{type(e).__name__}: {str(e)[:300]}"
+    return jsonify(out)
+
+
 @admin_bp.route("/debug-fuji-api")
 def debug_fuji_api():
     """Test from Railway whether Fuji's JSON Store API is reachable (vs the CF-blocked
