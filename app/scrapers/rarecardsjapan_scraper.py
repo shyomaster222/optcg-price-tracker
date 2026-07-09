@@ -133,46 +133,36 @@ class RareCardsJapanScraper(BaseScraper):
         return "box"
 
     def scrape(self) -> List[dict]:
-        """Scrape all One Piece booster products from rarecardsjapan.com."""
-        store_currency = "USD"  # RCJ base currency is USD; /shop.json is unreliable due to Shopify geo-detection
-        products = self._fetch_all_products()
-        results: List[dict] = []
+        """Scrape RCJ One Piece prices via the authenticated Admin API.
 
-        for product in products:
-            title = product.get("title", "")
+        The public products.json is rate-limited (429) from cloud IPs, which was
+        silently starving the tracker of RCJ prices. The Admin API is authenticated
+        and reliable. RCJ base currency is USD."""
+        from app.services import rcj_shopify
+
+        products = rcj_shopify.fetch_products_admin()
+        results: List[dict] = []
+        for p in products:
+            title = p.get("title", "")
             set_code = self._detect_set_code(title)
             if not set_code:
                 continue
+            try:
+                price = float(p.get("price"))
+            except (ValueError, TypeError):
+                continue
+            if price <= 0:
+                continue
+            handle = p.get("handle", "")
+            results.append({
+                "set_code": set_code,
+                "product_type": self._detect_product_type(title),
+                "price": price,
+                "price_usd": price,
+                "currency": "USD",
+                "in_stock": bool(p.get("available")) or (p.get("inventory") or 0) > 0,
+                "source_url": f"{BASE_URL}/products/{handle}" if handle else BASE_URL,
+            })
 
-            product_type = self._detect_product_type(title)
-            product_handle = product.get("handle", "")
-            source_url = f"{BASE_URL}/products/{product_handle}" if product_handle else BASE_URL
-
-            for variant in product.get("variants", []):
-                price_str = variant.get("price", "0")
-                try:
-                    price = float(price_str)
-                except (ValueError, TypeError):
-                    continue
-
-                if price <= 0:
-                    continue
-
-                price_usd = convert_to_usd(price, store_currency)
-                in_stock = (
-                    variant.get("available", False)
-                    and variant.get("inventory_policy") != "deny"
-                )
-
-                results.append({
-                    "set_code": set_code,
-                    "product_type": product_type,
-                    "price": price,
-                    "price_usd": price_usd,
-                    "currency": store_currency,
-                    "in_stock": in_stock,
-                    "source_url": source_url,
-                })
-
-        logger.info("RareCardsJapan: found %d price records", len(results))
+        logger.info("RareCardsJapan: found %d price records (Admin API)", len(results))
         return results

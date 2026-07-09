@@ -270,6 +270,39 @@ def _fmt_pct(value: Optional[float]) -> str:
     return f"{sign}{value:.1f}%"
 
 
+def _scraper_freshness_html() -> str:
+    """Per-source 'last updated' table so a dead scraper is visible at a glance."""
+    now = datetime.utcnow()
+    rows = []
+    for r in Retailer.query.filter_by(is_active=True).all():
+        latest = (
+            PriceHistory.query.filter_by(retailer_id=r.id)
+            .order_by(PriceHistory.scraped_at.desc()).first()
+        )
+        if not latest or not latest.scraped_at:
+            continue  # never scraped -> not part of the active pipeline
+        age = (now - latest.scraped_at).total_seconds() / 3600
+        rows.append((r.name, age))
+    if not rows:
+        return ""
+    rows.sort(key=lambda x: x[1])
+    any_stale = any(age > 48 for _, age in rows)
+    cells = ""
+    for name, age in rows:
+        stale = age > 48
+        color = "#c0392b" if stale else "#157347"
+        label = (f"{age:.0f}h ago" if age < 48 else f"{age/24:.0f} days ago ⚠")
+        cells += (f'<tr><td style="padding:6px 10px;border:1px solid #eee;">{name}</td>'
+                  f'<td style="padding:6px 10px;border:1px solid #eee;text-align:right;color:{color};font-weight:600;">{label}</td></tr>')
+    banner = ('<p style="background:#fdecea;color:#b42318;padding:10px;border-radius:4px;font-weight:bold;">'
+              '⚠ A price source looks stale — its data below may be out of date. Check the scraper.</p>'
+              if any_stale else "")
+    return (f'<h3 style="color:#444;margin-top:28px;">Scraper health</h3>{banner}'
+            f'<table style="border-collapse:collapse;font-size:13px;">'
+            f'<thead><tr style="background:#eee;"><th style="padding:6px 10px;text-align:left;">Source</th>'
+            f'<th style="padding:6px 10px;">Last updated</th></tr></thead><tbody>{cells}</tbody></table>')
+
+
 def _build_html(report: dict) -> str:
     date = report["date"]
     flagged = report["flagged"]
@@ -378,6 +411,8 @@ def _build_html(report: dict) -> str:
       {fuji_rows_html}
     </tbody>
   </table>
+
+  {_scraper_freshness_html()}
 
   <p style="margin-top:20px;color:#666;font-size:12px;">
     All prices in USD. % Diff = (Fuji − RCJ) / RCJ × 100. Flagged when |diff| ≥ 5%.
