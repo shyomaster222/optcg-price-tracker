@@ -248,6 +248,47 @@ def price_review():
     return Response(html, mimetype="text/html")
 
 
+@admin_bp.route("/ingest-fuji", methods=["POST"])
+def ingest_fuji():
+    """Ingest Fuji price rows scraped elsewhere (Railway's IP is Cloudflare-blocked).
+
+    Auth: X-Ingest-Key header must equal SHOPIFY_ADMIN_TOKEN. Body:
+    {"fuji": [{set_code, product_type, price_usd, in_stock, source_url, set_name?}]}"""
+    from flask import request, current_app
+    from app.extensions import db as _db
+    from app.models.product import Product
+    from datetime import datetime
+
+    expected = current_app.config.get("SHOPIFY_ADMIN_TOKEN")
+    if not expected or request.headers.get("X-Ingest-Key") != expected:
+        return jsonify({"error": "unauthorized"}), 401
+
+    fuji = Retailer.query.filter_by(slug="fujicardshop").first()
+    if fuji is None:
+        return jsonify({"error": "fujicardshop retailer not found"}), 404
+
+    recs = (request.get_json(force=True, silent=True) or {}).get("fuji", [])
+    now = datetime.utcnow()
+    n = 0
+    for f in recs:
+        sc, pt = f.get("set_code"), f.get("product_type")
+        price = f.get("price_usd")
+        if not sc or not pt or price is None:
+            continue
+        prod = Product.query.filter_by(set_code=sc, product_type=pt).first()
+        if prod is None:
+            prod = Product(set_code=sc, set_name=f.get("set_name") or sc, product_type=pt)
+            _db.session.add(prod)
+            _db.session.flush()
+        _db.session.add(PriceHistory(
+            product_id=prod.id, retailer_id=fuji.id, price=price, price_usd=price,
+            currency="USD", in_stock=bool(f.get("in_stock", True)),
+            source_url=f.get("source_url"), scraped_at=now))
+        n += 1
+    _db.session.commit()
+    return jsonify({"ingested": n, "scraped_at": now.isoformat()})
+
+
 @admin_bp.route("/fuji-urls")
 def fuji_urls_route():
     """Fast DB-only dump of the latest Fuji price + source_url per product.
