@@ -121,6 +121,154 @@ def trigger_scraper():
     return jsonify({"status": "ok", "results": summary})
 
 
+@admin_bp.route("/run-price-sync", methods=["POST"])
+def run_price_sync_route():
+    from flask import request
+    from app.extensions import db as _db
+    _db.create_all()  # ensure price_sync_log exists
+    from app.services.price_sync_service import run_price_sync
+    summary = run_price_sync()
+    if request.args.get("email") == "1":
+        from app.services.email_service import send_price_sync_report
+        send_price_sync_report(summary)
+    return jsonify({
+        "enabled": summary["enabled"],
+        "dry_run": summary["dry_run"],
+        "counts": summary["counts"],
+        "note": summary.get("note"),
+        "results": summary["results"],
+    })
+
+
+@admin_bp.route("/apply-price/<int:variant_id>", methods=["POST"])
+def apply_price_route(variant_id):
+    from app.services.price_sync_service import apply_one
+    result = apply_one(variant_id)
+    return jsonify(result), (200 if result.get("ok") else 400)
+
+
+@admin_bp.route("/price-review")
+def price_review():
+    """Show the most recent HELD items with an Apply button each."""
+    from flask import Response
+    from app.models.price_sync_log import PriceSyncLog
+    from sqlalchemy import func
+
+    # Latest log row per variant, then keep those whose latest action is 'held'.
+    subq = (
+        PriceHistory.query.session.query(
+            PriceSyncLog.rcj_variant_id.label("vid"),
+            func.max(PriceSyncLog.created_at).label("latest"),
+        )
+        .group_by(PriceSyncLog.rcj_variant_id)
+        .subquery()
+    )
+    latest_rows = (
+        PriceSyncLog.query
+        .join(subq, (PriceSyncLog.rcj_variant_id == subq.c.vid)
+              & (PriceSyncLog.created_at == subq.c.latest))
+        .order_by(PriceSyncLog.set_code, PriceSyncLog.product_type)
+        .all()
+    )
+    held = [r for r in latest_rows if r.action == "held"]
+
+    def fmt(v):
+        return f"${float(v):.2f}" if v is not None else "—"
+
+    rows_html = ""
+    for r in held:
+        pct = f"{r.pct_change * 100:+.1f}%" if r.pct_change is not None else "—"
+        rows_html += f"""
+        <tr id="row-{r.rcj_variant_id}">
+          <td>{r.set_code} {r.product_type}</td>
+          <td style="text-align:right;">{fmt(r.current_price)}</td>
+          <td style="text-align:right;">{fmt(r.fuji_price)}</td>
+          <td style="text-align:right;"><b>{fmt(r.target_price)}</b></td>
+          <td style="text-align:right;">{pct}</td>
+          <td>{r.reason or ''}</td>
+          <td><button onclick="applyOne({r.rcj_variant_id})">Apply</button></td>
+        </tr>"""
+    if not rows_html:
+        rows_html = '<tr><td colspan="7" style="text-align:center;color:#666;padding:16px;">Nothing held for review 🎉</td></tr>'
+
+    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>RCJ Price Review</title>
+    <style>
+      body{{font-family:Arial,sans-serif;max-width:960px;margin:auto;padding:24px;color:#222;}}
+      table{{border-collapse:collapse;width:100%;font-size:14px;}}
+      th,td{{border:1px solid #ddd;padding:8px;}}
+      th{{background:#c0392b;color:#fff;}}
+      button{{cursor:pointer;padding:6px 12px;}}
+      #applyAll{{margin:12px 0;padding:8px 16px;background:#1a5276;color:#fff;border:none;border-radius:4px;}}
+      #msg{{margin:12px 0;font-weight:bold;}}
+    </style></head><body>
+    <h2>RCJ Price Review — held changes</h2>
+    <p>These changes exceed the auto-apply tolerance or fall below the floor. Review, then Apply to push to Shopify.</p>
+    <button id="applyAll" onclick="applyAll()">Apply all held</button>
+    <div id="msg"></div>
+    <table>
+      <thead><tr><th style="text-align:left;">Product</th><th>Current</th><th>Fuji</th><th>Target</th><th>Change</th><th style="text-align:left;">Note</th><th>Action</th></tr></thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+    <script>
+      async function applyOne(vid) {{
+        const msg = document.getElementById('msg');
+        msg.textContent = 'Applying ' + vid + ' ...';
+        const resp = await fetch('/admin/apply-price/' + vid, {{method:'POST'}});
+        const data = await resp.json();
+        if (data.ok) {{
+          const row = document.getElementById('row-' + vid);
+          if (row) row.style.opacity = 0.4;
+          msg.textContent = '✅ ' + vid + (data.dry_run ? ' (dry-run) ' : ' ') + '-> $' + data.target;
+        }} else {{
+          msg.textContent = '❌ ' + vid + ': ' + data.error;
+        }}
+      }}
+      async function applyAll() {{
+        const ids = [...document.querySelectorAll('tr[id^=row-]')].map(r => r.id.replace('row-',''));
+        for (const vid of ids) {{ await applyOne(vid); }}
+      }}
+    </script>
+    </body></html>"""
+    return Response(html, mimetype="text/html")
+
+
+@admin_bp.route("/build-price-map", methods=["POST"])
+def build_price_map_route():
+    """Generate the draft price map on the server (where Fuji DB + RCJ live).
+
+    Returns the draft JSON for you to review, save as price_map.json, and commit."""
+    from collections import defaultdict
+    from app.scrapers.rarecardsjapan_scraper import RareCardsJapanScraper
+    from scripts.build_price_map import fuji_from_db, build
+
+    fuji_by_key = fuji_from_db()
+    scraper = RareCardsJapanScraper()
+    products = scraper._fetch_all_products()
+    rcj_rows = []
+    for p in products:
+        set_code = scraper._detect_set_code(p.get("title", ""))
+        if not set_code:
+            continue
+        ptype = scraper._detect_product_type(p.get("title", ""))
+        variants = p.get("variants", []) or []
+        for v in variants:
+            try:
+                price = float(v.get("price", "0"))
+            except (ValueError, TypeError):
+                price = None
+            rcj_rows.append({
+                "set_code": set_code, "product_type": ptype,
+                "rcj_handle": p.get("handle", ""), "rcj_product_id": p.get("id"),
+                "rcj_variant_id": v.get("id"), "rcj_variant_title": v.get("title"),
+                "rcj_title": p.get("title", ""), "rcj_current_price": price,
+                "rcj_variant_count": len(variants), "rcj_available": bool(v.get("available")),
+            })
+    mapped, review = build(fuji_by_key, rcj_rows)
+    return jsonify({"price_map": mapped, "report": review,
+                    "counts": {"mapped": len(mapped),
+                               "enabled": sum(1 for m in mapped if m["enabled"])}})
+
+
 @admin_bp.route("/debug-fuji")
 def debug_fuji():
     from app.scrapers.fujicardshop_scraper import FujiCardShopScraper
@@ -190,6 +338,7 @@ def seed_missing_products():
         {"set_code": "OP-13", "set_name": "CARRYING ON HIS WILL", "set_name_jp": "受け継ぐ意志", "release_date": date(2025, 11, 7), "msrp_jpy": 6600},
         {"set_code": "OP-14", "set_name": "THE AZURE SEA'S SEVEN", "set_name_jp": "七海の覇王", "release_date": date(2026, 2, 6), "msrp_jpy": 6600},
         {"set_code": "OP-15", "set_name": "ADVENTURE ON KAMI'S ISLAND", "set_name_jp": "神の島の冒険", "release_date": date(2026, 5, 30), "msrp_jpy": 6600},
+        {"set_code": "OP-16", "set_name": "THE HOUR OF DECISIVE BATTLE", "set_name_jp": "決戦の刻", "release_date": date(2026, 8, 29), "msrp_jpy": 6600},
         {"set_code": "EB-04", "set_name": "EGGHEAD CRISIS", "set_name_jp": "エッグヘッド危機", "release_date": date(2025, 9, 27), "msrp_jpy": 6600},
         {"set_code": "PRB-01", "set_name": "THE BEST", "set_name_jp": "THE BEST", "release_date": date(2024, 5, 25), "msrp_jpy": 8800},
         {"set_code": "PRB-02", "set_name": "THE BEST VOL.2", "set_name_jp": "THE BEST vol.2", "release_date": date(2025, 7, 19), "msrp_jpy": 8800},

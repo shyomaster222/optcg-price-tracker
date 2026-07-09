@@ -1,0 +1,5 @@
+{
+  "_comment": "Per-product minimum USD price. The auto-pricer will NEVER set a price below this; a target below the floor is held for your review instead. Key format: 'SET-CODE:box' or 'SET-CODE:case'. Delete the examples and add your real cost-based floors. Anything not listed here relies only on the relative MAX_DROP safety floor.",
+  "_example_OP-01:box": 90.00,
+  "_example_OP-01:case": 1050.00
+}

@@ -33,6 +33,7 @@ class FujiCardShopScraper(BaseScraper):
         'OP-13': r'OP-?13|carrying\s*on\s*his\s*will',
         'OP-14': r'OP-?14|azure\s*sea',
         'OP-15': r'OP-?15|adventure\s*on\s*kami',
+        'OP-16': r'OP-?16|hour\s*of\s*decisive\s*battle|decisive\s*battle',
         'EB-01': r'EB-?01|memorial',
         'EB-02': r'EB-?02|anime\s*25th',
         'EB-03': r'EB-?03|heroines',

@@ -40,12 +40,14 @@ SET_PATTERNS = {
     "OP-13": r"OP-?13|carrying\s*on\s*his\s*will",
     "OP-14": r"OP-?14|azure\s*sea",
     "OP-15": r"OP-?15|kami",
+    "OP-16": r"OP-?16|hour\s*of\s*decisive\s*battle|decisive\s*battle",
     "EB-01": r"EB-?01|memorial\s*collection",
     "EB-02": r"EB-?02|anime\s*25th",
     "EB-03": r"EB-?03|heroines",
-    "EB-04": r"EB-?04",
-    "PRB-01": r"PRB-?01|the\s*best",
-    "PRB-02": r"PRB-?02|premium\s*vol\s*2",
+    "EB-04": r"EB-?04|egghead",
+    # PRB-01 must NOT match "The Best vol.2" (that's PRB-02) — negative lookahead.
+    "PRB-01": r"PRB-?01|the\s*best(?!\s*vol)",
+    "PRB-02": r"PRB-?02|the\s*best\s*vol\.?\s*2",
 }
 
 COLLECTION_PATHS = [

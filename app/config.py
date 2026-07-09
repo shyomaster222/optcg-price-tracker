@@ -26,6 +26,32 @@ class Config:
     RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
     COMPANY_EMAIL = os.environ.get('COMPANY_EMAIL')
 
+    # ------------------------------------------------------------------
+    # Price sync (RCJ Shopify <- Fuji, undercut)
+    # ------------------------------------------------------------------
+    # Shopify Admin API (create a custom app in the RCJ store with write_products)
+    SHOPIFY_SHOP = os.environ.get('SHOPIFY_SHOP', 'rare-cards-japan.myshopify.com')
+    SHOPIFY_ADMIN_TOKEN = os.environ.get('SHOPIFY_ADMIN_TOKEN')
+    SHOPIFY_API_VERSION = os.environ.get('SHOPIFY_API_VERSION', '2025-01')
+
+    # Master switches
+    PRICE_SYNC_ENABLED = os.environ.get('PRICE_SYNC_ENABLED', 'false').lower() == 'true'
+    # Dry run: compute + log + email, but never write to Shopify. Default TRUE (safe).
+    PRICE_SYNC_DRY_RUN = os.environ.get('PRICE_SYNC_DRY_RUN', 'true').lower() == 'true'
+
+    # Pricing rule + guardrails (all fractions, e.g. 0.03 = 3%)
+    UNDERCUT_PCT = float(os.environ.get('UNDERCUT_PCT', '0.03'))       # target = fuji * (1 - this)
+    AUTO_TOLERANCE = float(os.environ.get('AUTO_TOLERANCE', '0.05'))   # auto-apply if |change| <= this
+    MAX_DROP = float(os.environ.get('MAX_DROP', '0.30'))              # relative safety floor vs current
+    NOOP_EPSILON = float(os.environ.get('NOOP_EPSILON', '0.01'))     # skip changes smaller than this fraction
+    NOOP_EPSILON_USD = float(os.environ.get('NOOP_EPSILON_USD', '0.50'))  # ...and smaller than this many USD
+    FUJI_FRESH_HOURS = int(os.environ.get('FUJI_FRESH_HOURS', '48'))  # ignore Fuji prices older than this
+    PRICE_ROUND_99 = os.environ.get('PRICE_ROUND_99', 'false').lower() == 'true'  # round to .99 endings
+
+    # Config file locations (repo-root relative by default)
+    PRICE_MAP_PATH = os.environ.get('PRICE_MAP_PATH', 'price_map.json')
+    PRICE_FLOORS_PATH = os.environ.get('PRICE_FLOORS_PATH', 'price_floors.json')
+
 
 class DevelopmentConfig(Config):
     """Development configuration"""
