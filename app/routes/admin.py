@@ -232,6 +232,53 @@ def price_review():
     return Response(html, mimetype="text/html")
 
 
+@admin_bp.route("/fuji-urls")
+def fuji_urls_route():
+    """Fast DB-only dump of the latest Fuji price + source_url per product.
+
+    Lightweight (single query, no storefront fetch) so it won't block the web
+    worker. The RCJ side of the price map is joined client-side."""
+    from app.models.product import Product
+    from app.models.price import PriceHistory
+    from sqlalchemy import func
+
+    fuji = Retailer.query.filter_by(slug="fujicardshop").first()
+    if fuji is None:
+        return jsonify({"error": "fujicardshop retailer not found"}), 404
+
+    # Latest Fuji price row per product (one grouped query + join).
+    subq = (
+        PriceHistory.query.session.query(
+            PriceHistory.product_id.label("pid"),
+            func.max(PriceHistory.scraped_at).label("latest"),
+        )
+        .filter(PriceHistory.retailer_id == fuji.id)
+        .group_by(PriceHistory.product_id)
+        .subquery()
+    )
+    rows = (
+        PriceHistory.query
+        .join(subq, (PriceHistory.product_id == subq.c.pid)
+              & (PriceHistory.scraped_at == subq.c.latest))
+        .filter(PriceHistory.retailer_id == fuji.id)
+        .all()
+    )
+    out = []
+    for r in rows:
+        prod = Product.query.get(r.product_id)
+        if not prod or not r.source_url:
+            continue
+        out.append({
+            "set_code": prod.set_code,
+            "product_type": prod.product_type,
+            "source_url": r.source_url,
+            "price_usd": float(r.price_usd) if r.price_usd is not None else (float(r.price) if r.price else None),
+            "in_stock": bool(r.in_stock),
+            "scraped_at": r.scraped_at.isoformat() if r.scraped_at else None,
+        })
+    return jsonify({"count": len(out), "fuji": out})
+
+
 @admin_bp.route("/build-price-map", methods=["POST"])
 def build_price_map_route():
     """Generate the draft price map on the server (where Fuji DB + RCJ live).
