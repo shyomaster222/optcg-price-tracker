@@ -583,13 +583,11 @@ def _build_price_sync_html(summary: dict) -> str:
     # everything skips for the same reason and the banner already explains it).
     nofuji_section = _ps_nofuji_section(results, not summary.get("fuji_stale"))
 
-    # Include the admin key so Apply works from the review page (writes are gated).
-    from urllib.parse import quote
-    _rk = quote(current_app.config.get("SHOPIFY_ADMIN_TOKEN") or "")
-    _review_url = f"{_DASHBOARD_URL}/admin/price-review" + (f"?key={_rk}" if _rk else "")
+    # Link only — no token in the email. The review page asks for the admin key
+    # once and keeps it in the browser.
     review_btn = f"""
       <tr><td style="padding:22px 28px 0 28px;">
-        <a href="{_review_url}" style="display:inline-block;background:{_PS_HEAD};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 20px;border-radius:8px;">Review &amp; apply held changes →</a>
+        <a href="{_DASHBOARD_URL}/admin/price-review" style="display:inline-block;background:{_PS_HEAD};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 20px;border-radius:8px;">Review &amp; apply held changes →</a>
       </td></tr>""" if counts.get("held") else ""
 
     oos = summary.get("out_of_stock", 0)

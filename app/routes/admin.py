@@ -32,7 +32,8 @@ def _gate_admin_writes():
         return None
     expected = _admin_key()
     if not expected:
-        return None
+        # Fail closed: no key configured -> deny writes rather than open them up.
+        return jsonify({"error": "admin writes locked: SHOPIFY_ADMIN_TOKEN not configured"}), 503
     provided = (request.headers.get("X-Admin-Key")
                 or request.headers.get("X-Ingest-Key")
                 or request.args.get("key"))
@@ -247,7 +248,6 @@ def price_review():
     if not rows_html:
         rows_html = '<tr><td colspan="7" style="text-align:center;color:#666;padding:16px;">Nothing held for review 🎉</td></tr>'
 
-    key = request.args.get("key", "")  # threaded to the Apply calls (writes are gated)
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>RCJ Price Review</title>
     <style>
       body{{font-family:Arial,sans-serif;max-width:960px;margin:auto;padding:24px;color:#222;}}
@@ -267,11 +267,23 @@ def price_review():
       <tbody>{rows_html}</tbody>
     </table>
     <script>
-      const KEY = "{key}";
+      // Admin key is entered once and kept in this browser only (never in the URL
+      // or email). It is sent solely as a request header.
+      function ensureKey() {{
+        let k = localStorage.getItem('rcj_admin_key') || '';
+        if (!k) {{
+          k = (window.prompt('Enter your admin key to apply changes:') || '').trim();
+          if (k) localStorage.setItem('rcj_admin_key', k);
+        }}
+        return k;
+      }}
       async function applyOne(vid) {{
         const msg = document.getElementById('msg');
+        const key = ensureKey();
+        if (!key) {{ msg.textContent = 'Admin key required to apply.'; return; }}
         msg.textContent = 'Applying ' + vid + ' ...';
-        const resp = await fetch('/admin/apply-price/' + vid, {{method:'POST', headers:{{'X-Admin-Key': KEY}}}});
+        const resp = await fetch('/admin/apply-price/' + vid, {{method:'POST', headers:{{'X-Admin-Key': key}}}});
+        if (resp.status === 401) {{ localStorage.removeItem('rcj_admin_key'); msg.textContent = '❌ Wrong admin key — cleared, try again.'; return; }}
         const data = await resp.json();
         if (data.ok) {{
           const row = document.getElementById('row-' + vid);
