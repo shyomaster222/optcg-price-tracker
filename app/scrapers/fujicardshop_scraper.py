@@ -1,7 +1,7 @@
-from typing import List
+from typing import List, Optional
+import html as _html
 import re
 import logging
-from bs4 import BeautifulSoup
 
 from app.scrapers.base_scraper import BaseScraper
 
@@ -58,9 +58,14 @@ class FujiCardShopScraper(BaseScraper):
         'EB-02': r'EB-?02|anime\s*25th',
         'EB-03': r'EB-?03|heroines',
         'EB-04': r'EB-?04|egghead',
+        'OP-17': r'OP-?17|world.?s\s*strongest\s*warriors',
         'PRB-01': r'PRB-?01|the\s*best(?!\s*vol)',
         'PRB-02': r'PRB-?02|the\s*best\s*vol\.?\s*2',
     }
+
+    # WooCommerce Store API — reachable from Railway (the HTML page is Cloudflare
+    # 403'd from datacenter IPs). Returns clean JSON incl. USD prices + stock.
+    API_URL = "https://www.fujicardshop.com/wp-json/wc/store/v1/products"
 
     @property
     def retailer_name(self) -> str:
@@ -71,80 +76,76 @@ class FujiCardShopScraper(BaseScraper):
         return "fujicardshop"
 
     def scrape(self) -> List[dict]:
+        """Scrape Japanese One Piece sealed product from Fuji's Store API (USD)."""
         results = []
         page = 1
         while True:
-            if page == 1:
-                url = f"{self.BASE_URL}{self.CATEGORY_PATH}?currency=USD"
-            else:
-                url = f"{self.BASE_URL}{self.CATEGORY_PATH}page/{page}/?currency=USD"
+            url = (f"{self.API_URL}?per_page=100&page={page}"
+                   f"&category=one-piece&currency=USD")
             try:
-                response = self.fetch(url)
-                # A non-existent page redirects to page 1 or returns no products
-                soup = BeautifulSoup(response.text, "lxml")
-                page_results = list(self._parse_products(soup, url))
-                if not page_results:
-                    break
-                results.extend(page_results)
-                page += 1
+                products = self.fetch(url).json()
             except Exception as e:
-                logger.error("Error scraping FujiCardShop page %d: %s", page, e)
+                logger.error("FujiCardShop API error (page %d): %s", page, e)
                 break
+            if not products:
+                break
+            for p in products:
+                rec = self._parse_api_product(p)
+                if rec:
+                    results.append(rec)
+            if len(products) < 100:
+                break
+            page += 1
+        logger.info("FujiCardShop: found %d sealed price records", len(results))
         return results
 
-    def _parse_products(self, soup: BeautifulSoup, page_url: str = ""):
-        items = soup.select(".product, .type-product, li.product")
+    def _detect_set_code(self, name: str) -> Optional[str]:
+        for set_code, pattern in self.SET_PATTERNS.items():
+            if re.search(pattern, name, re.IGNORECASE):
+                return set_code
+        return None
 
-        for item in items:
-            title_elem = item.select_one(
-                ".woocommerce-loop-product__title, .product_title, h2, h3"
-            )
-            # Prefer the sale price if present, otherwise regular price
-            price_elem = (
-                item.select_one(".price ins .woocommerce-Price-amount bdi")
-                or item.select_one(".price ins .amount")
-                or item.select_one(".price .woocommerce-Price-amount bdi")
-                or item.select_one(".price .woocommerce-Price-amount")
-                or item.select_one(".price bdi")
-                or item.select_one(".woocommerce-Price-amount")
-            )
-            link = item.select_one("a[href*='fujicardshop.com']") or item.select_one("a")
+    def _parse_api_product(self, p: dict) -> Optional[dict]:
+        name = _html.unescape(p.get("name", "")).upper()
 
-            if not title_elem:
-                continue
+        # Japanese sealed boxes / cases only (skip promos, singles, comics).
+        if "JAPAN" not in name and "JPN" not in name and " JP" not in name:
+            return None
+        if "CASE" in name:
+            product_type = "case"
+        elif "BOX" in name:
+            product_type = "box"
+        else:
+            return None
 
-            title = title_elem.get_text(strip=True).upper()
+        set_code = self._detect_set_code(name)
+        if not set_code:
+            return None
 
-            # Only Japanese products
-            if "JAPANESE" not in title and "JPN" not in title and "JP" not in title:
-                continue
+        prices = p.get("prices", {}) or {}
+        try:
+            minor = int(prices.get("currency_minor_unit", 2))
+            value = int(prices.get("price")) / (10 ** minor)
+        except (TypeError, ValueError):
+            return None
 
-            for set_code, pattern in self.SET_PATTERNS.items():
-                if re.search(pattern, title, re.IGNORECASE):
-                    is_case = "CASE" in title
-                    product_type = "case" if is_case else "box"
+        # ?currency=USD should return USD; convert defensively if not.
+        code = prices.get("currency_code", "USD")
+        if code == "USD":
+            price_usd = value
+        else:
+            from app.utils.currency import convert_to_usd
+            price_usd = convert_to_usd(value, code)
 
-                    if price_elem:
-                        price_text = price_elem.get_text(strip=True)
-                        price_match = re.search(r"[\d,]+\.?\d*", price_text)
-                        if price_match:
-                            price = float(price_match.group().replace(",", ""))
-                            if 10 < price < 2000:
-                                source_url = (
-                                    link.get("href", page_url)
-                                    if link
-                                    else page_url or f"{self.BASE_URL}{self.CATEGORY_PATH}"
-                                )
-                                yield {
-                                    "set_code": set_code,
-                                    "product_type": product_type,
-                                    "price": price,
-                                    "price_usd": price,
-                                    "currency": "USD",
-                                    "in_stock": (
-                                        "out of stock" not in item.get_text().lower()
-                                        and "sold out" not in item.get_text().lower()
-                                    ),
-                                    "source_url": source_url,
-                                }
-                    break
+        if not (10 < price_usd < 2000):
+            return None
+
+        return {
+            "set_code": set_code,
+            "product_type": product_type,
+            "price": round(price_usd, 2),
+            "price_usd": round(price_usd, 2),
+            "currency": "USD",
+            "in_stock": bool(p.get("is_in_stock")),
+            "source_url": p.get("permalink"),
+        }

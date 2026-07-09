@@ -18,12 +18,27 @@ Config (app/config.py):
 from __future__ import annotations
 
 import logging
+import os
 from typing import Dict, Optional, Tuple
 
 import requests
 from flask import current_app
 
 logger = logging.getLogger(__name__)
+
+
+def _conf(key: str, default=None):
+    """Read config from the Flask app if in context, else fall back to os.environ.
+
+    The scrapers run in worker threads without an app context, so credential reads
+    must not depend on current_app."""
+    try:
+        val = current_app.config.get(key)
+        if val is not None:
+            return val
+    except Exception:
+        pass
+    return os.environ.get(key, default)
 
 _STOREFRONT = "https://www.rarecardsjapan.com"
 _COLLECTION_PATHS = [
@@ -94,11 +109,65 @@ query($ids: [ID!]!) {
 """.strip()
 
 
+_PRODUCTS_QUERY = """
+query($cursor: String) {
+  products(first: 100, after: $cursor) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      title
+      handle
+      variants(first: 10) { nodes { price inventoryQuantity availableForSale } }
+    }
+  }
+}
+""".strip()
+
+
+def fetch_products_admin() -> list:
+    """List all RCJ products via the authenticated Admin API (title, handle, and the
+    first variant's price/stock). Used by the RCJ scraper instead of the public
+    products.json, which is rate-limited (429) from cloud IPs."""
+    token = _conf("SHOPIFY_ADMIN_TOKEN")
+    if not token:
+        raise ShopifyConfigError("SHOPIFY_ADMIN_TOKEN is not configured")
+
+    out, cursor = [], None
+    while True:
+        resp = requests.post(
+            _graphql_endpoint(),
+            headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"},
+            json={"query": _PRODUCTS_QUERY, "variables": {"cursor": cursor}},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        if body.get("errors"):
+            raise RuntimeError(f"Admin API errors: {body['errors']}")
+        data = (body.get("data") or {}).get("products") or {}
+        for node in data.get("nodes", []):
+            variants = (node.get("variants") or {}).get("nodes") or []
+            if not variants:
+                continue
+            v = variants[0]
+            out.append({
+                "title": node.get("title", ""),
+                "handle": node.get("handle", ""),
+                "price": v.get("price"),
+                "inventory": v.get("inventoryQuantity"),
+                "available": bool(v.get("availableForSale")),
+            })
+        page = data.get("pageInfo") or {}
+        if not page.get("hasNextPage"):
+            break
+        cursor = page.get("endCursor")
+    return out
+
+
 def fetch_prices_by_variant_ids(variant_ids) -> Dict[int, dict]:
     """Return {variant_id: {price, product_id, available}} via the authenticated
     Admin GraphQL API (not the rate-limited storefront JSON). Only fetches the
     given variants. Batches ids to stay well under node limits."""
-    token = current_app.config.get("SHOPIFY_ADMIN_TOKEN")
+    token = _conf("SHOPIFY_ADMIN_TOKEN")
     if not token:
         raise ShopifyConfigError("SHOPIFY_ADMIN_TOKEN is not configured")
 
@@ -156,8 +225,8 @@ def _gid(kind: str, numeric_id) -> str:
 
 
 def _graphql_endpoint() -> str:
-    shop = current_app.config.get("SHOPIFY_SHOP")
-    version = current_app.config.get("SHOPIFY_API_VERSION", "2025-01")
+    shop = _conf("SHOPIFY_SHOP", "48wpjk-rh.myshopify.com")
+    version = _conf("SHOPIFY_API_VERSION", "2025-01")
     if not shop:
         raise ShopifyConfigError("SHOPIFY_SHOP is not configured")
     return f"https://{shop}/admin/api/{version}/graphql.json"
@@ -176,7 +245,7 @@ def update_variant_price(product_id, variant_id, price: float,
         logger.info("[DRY_RUN] would set variant %s -> $%s", variant_id, price_str)
         return True, None
 
-    token = current_app.config.get("SHOPIFY_ADMIN_TOKEN")
+    token = _conf("SHOPIFY_ADMIN_TOKEN")
     if not token:
         return False, "SHOPIFY_ADMIN_TOKEN is not configured"
 
