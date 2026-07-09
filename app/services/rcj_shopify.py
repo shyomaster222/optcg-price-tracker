@@ -163,14 +163,16 @@ def _graphql_endpoint() -> str:
     return f"https://{shop}/admin/api/{version}/graphql.json"
 
 
-def update_variant_price(product_id, variant_id, price: float) -> Tuple[bool, Optional[str]]:
+def update_variant_price(product_id, variant_id, price: float,
+                         force_live: bool = False) -> Tuple[bool, Optional[str]]:
     """Set a variant's price. Returns (ok, error_message).
 
-    Honors PRICE_SYNC_DRY_RUN: logs the intended write and returns (True, None)
-    without calling Shopify."""
+    Honors PRICE_SYNC_DRY_RUN (logs and no-ops) UNLESS force_live=True, which is
+    used for explicit manual applies from the review page — a human clicking Apply
+    means the price should actually change even while the daily automation is dry."""
     price_str = f"{float(price):.2f}"
 
-    if current_app.config.get("PRICE_SYNC_DRY_RUN", True):
+    if current_app.config.get("PRICE_SYNC_DRY_RUN", True) and not force_live:
         logger.info("[DRY_RUN] would set variant %s -> $%s", variant_id, price_str)
         return True, None
 

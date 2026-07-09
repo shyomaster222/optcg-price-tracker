@@ -188,8 +188,24 @@ def price_review():
     )
     held = [r for r in latest_rows if r.action == "held"]
 
+    # Live inventory for the held variants (Admin API) so stock shows on the page.
+    stock = {}
+    try:
+        from app.services import rcj_shopify
+        stock = rcj_shopify.fetch_prices_by_variant_ids([r.rcj_variant_id for r in held])
+    except Exception:
+        stock = {}
+
     def fmt(v):
         return f"${float(v):.2f}" if v is not None else "—"
+
+    def stock_cell(vid):
+        inv = (stock.get(int(vid)) or {}).get("inventory")
+        if inv is None:
+            return '<span style="color:#888;">—</span>'
+        if inv <= 0:
+            return '<span style="color:#c0392b;font-weight:bold;">Out</span>'
+        return str(inv)
 
     rows_html = ""
     for r in held:
@@ -197,11 +213,11 @@ def price_review():
         rows_html += f"""
         <tr id="row-{r.rcj_variant_id}">
           <td>{r.set_code} {r.product_type}</td>
+          <td style="text-align:center;">{stock_cell(r.rcj_variant_id)}</td>
           <td style="text-align:right;">{fmt(r.current_price)}</td>
           <td style="text-align:right;">{fmt(r.fuji_price)}</td>
           <td style="text-align:right;"><b>{fmt(r.target_price)}</b></td>
           <td style="text-align:right;">{pct}</td>
-          <td>{r.reason or ''}</td>
           <td><button onclick="applyOne({r.rcj_variant_id})">Apply</button></td>
         </tr>"""
     if not rows_html:
@@ -218,11 +234,11 @@ def price_review():
       #msg{{margin:12px 0;font-weight:bold;}}
     </style></head><body>
     <h2>RCJ Price Review — held changes</h2>
-    <p>These changes exceed the auto-apply tolerance or fall below the floor. Review, then Apply to push to Shopify.</p>
+    <p>These moved more than your tolerance or fall below your floor. <b>Clicking Apply changes that product's price on your store right away</b> (a manual apply is always live, even while the daily automation is in dry-run). "Out" means you have no stock — usually skip those.</p>
     <button id="applyAll" onclick="applyAll()">Apply all held</button>
     <div id="msg"></div>
     <table>
-      <thead><tr><th style="text-align:left;">Product</th><th>Current</th><th>Fuji</th><th>Target</th><th>Change</th><th style="text-align:left;">Note</th><th>Action</th></tr></thead>
+      <thead><tr><th style="text-align:left;">Product</th><th>Stock</th><th>Current</th><th>Fuji</th><th>New price</th><th>Change</th><th>Action</th></tr></thead>
       <tbody>{rows_html}</tbody>
     </table>
     <script>
@@ -234,7 +250,7 @@ def price_review():
         if (data.ok) {{
           const row = document.getElementById('row-' + vid);
           if (row) row.style.opacity = 0.4;
-          msg.textContent = '✅ ' + vid + (data.dry_run ? ' (dry-run) ' : ' ') + '-> $' + data.target;
+          msg.textContent = '✅ Updated on store: $' + data.current + ' -> $' + data.target;
         }} else {{
           msg.textContent = '❌ ' + vid + ': ' + data.error;
         }}
