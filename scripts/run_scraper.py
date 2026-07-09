@@ -50,9 +50,14 @@ def run_scrape(app, retailer_slug=None, limit=None, product_type=None):
         print()
 
         manager = ScraperManager()
-        manager.run_scrape_job(retailer_slug, product_limit=limit, product_type=product_type)
+        # NOTE: ScraperManager has no run_scrape_job() — calling it crashed this
+        # cron service every run (silent scrape outage). run_all() scrapes every
+        # registered retailer and persists results.
+        results = manager.run_all()
 
         print()
+        for name, data in results.items():
+            print(f"  {name}: {len(data)} prices")
         print("Scraping complete!")
         print("=" * 50)
 

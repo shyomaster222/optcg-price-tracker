@@ -194,8 +194,25 @@ def run_price_sync() -> dict:
 
         _record(result, dry_run, summary)
 
+    # Data-freshness alarm: if products are skipping because Fuji data is stale,
+    # surface it loudly so a silent scrape outage can't hide again.
+    stale_count = sum(1 for r in summary["results"] if "no fresh Fuji" in (r["reason"] or ""))
+    newest = (
+        PriceHistory.query.filter_by(retailer_id=fuji.id)
+        .order_by(PriceHistory.scraped_at.desc()).first()
+    )
+    newest_at = newest.scraped_at if newest else None
+    summary["fuji_last_scraped"] = newest_at.isoformat() if newest_at else None
+    summary["fuji_stale_count"] = stale_count
+    summary["fuji_stale"] = stale_count > 0
+    if newest_at is not None:
+        summary["fuji_age_hours"] = round((datetime.utcnow() - newest_at).total_seconds() / 3600, 1)
+    else:
+        summary["fuji_age_hours"] = None
+
     db.session.commit()
-    logger.info("price_sync: done — %s", summary["counts"])
+    logger.info("price_sync: done — %s (fuji_stale=%s, age=%sh)",
+                summary["counts"], summary["fuji_stale"], summary.get("fuji_age_hours"))
     return summary
 
 
