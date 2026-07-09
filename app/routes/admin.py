@@ -6,15 +6,39 @@ Admin / internal routes, including the scraper-health dashboard.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, jsonify, render_template, request, current_app
 
 from app.models.price import PriceHistory
 from app.models.retailer import Retailer
 from app.scrapers.scraper_manager import ScraperManager
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+
+def _admin_key() -> str:
+    return current_app.config.get("SHOPIFY_ADMIN_TOKEN") or os.environ.get("SHOPIFY_ADMIN_TOKEN") or ""
+
+
+@admin_bp.before_request
+def _gate_admin_writes():
+    """Require a key for any state-changing (POST) admin request. Reads stay open.
+
+    Key via `X-Admin-Key` / `X-Ingest-Key` header or `?key=`, matching
+    SHOPIFY_ADMIN_TOKEN. If no token is configured (local/dev), the gate is off."""
+    if request.method != "POST":
+        return None
+    expected = _admin_key()
+    if not expected:
+        return None
+    provided = (request.headers.get("X-Admin-Key")
+                or request.headers.get("X-Ingest-Key")
+                or request.args.get("key"))
+    if provided != expected:
+        return jsonify({"error": "unauthorized — missing/invalid admin key"}), 401
+    return None
 
 
 @admin_bp.route("/health")
@@ -223,6 +247,7 @@ def price_review():
     if not rows_html:
         rows_html = '<tr><td colspan="7" style="text-align:center;color:#666;padding:16px;">Nothing held for review 🎉</td></tr>'
 
+    key = request.args.get("key", "")  # threaded to the Apply calls (writes are gated)
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>RCJ Price Review</title>
     <style>
       body{{font-family:Arial,sans-serif;max-width:960px;margin:auto;padding:24px;color:#222;}}
@@ -242,10 +267,11 @@ def price_review():
       <tbody>{rows_html}</tbody>
     </table>
     <script>
+      const KEY = "{key}";
       async function applyOne(vid) {{
         const msg = document.getElementById('msg');
         msg.textContent = 'Applying ' + vid + ' ...';
-        const resp = await fetch('/admin/apply-price/' + vid, {{method:'POST'}});
+        const resp = await fetch('/admin/apply-price/' + vid, {{method:'POST', headers:{{'X-Admin-Key': KEY}}}});
         const data = await resp.json();
         if (data.ok) {{
           const row = document.getElementById('row-' + vid);

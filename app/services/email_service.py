@@ -270,18 +270,23 @@ def _fmt_pct(value: Optional[float]) -> str:
     return f"{sign}{value:.1f}%"
 
 
+# Slugs of the scrapers ScraperManager actually runs (others are dormant seeds).
+_ACTIVE_SCRAPER_SLUGS = ("pvpshoppe", "fptradingcards", "rarecardsjapan", "fujicardshop")
+
+
 def _scraper_freshness_html() -> str:
-    """Per-source 'last updated' table so a dead scraper is visible at a glance."""
+    """Per-source 'last updated' table so a dead scraper is visible at a glance.
+
+    Only the scrapers that actually run — dormant seed retailers would false-alarm."""
     now = datetime.utcnow()
     rows = []
-    for r in Retailer.query.filter_by(is_active=True).all():
+    for r in Retailer.query.filter(Retailer.slug.in_(_ACTIVE_SCRAPER_SLUGS)).all():
         latest = (
             PriceHistory.query.filter_by(retailer_id=r.id)
             .order_by(PriceHistory.scraped_at.desc()).first()
         )
-        if not latest or not latest.scraped_at:
-            continue  # never scraped -> not part of the active pipeline
-        age = (now - latest.scraped_at).total_seconds() / 3600
+        age = ((now - latest.scraped_at).total_seconds() / 3600
+               if latest and latest.scraped_at else None)
         rows.append((r.name, age))
     if not rows:
         return ""
@@ -578,9 +583,13 @@ def _build_price_sync_html(summary: dict) -> str:
     # everything skips for the same reason and the banner already explains it).
     nofuji_section = _ps_nofuji_section(results, not summary.get("fuji_stale"))
 
+    # Include the admin key so Apply works from the review page (writes are gated).
+    from urllib.parse import quote
+    _rk = quote(current_app.config.get("SHOPIFY_ADMIN_TOKEN") or "")
+    _review_url = f"{_DASHBOARD_URL}/admin/price-review" + (f"?key={_rk}" if _rk else "")
     review_btn = f"""
       <tr><td style="padding:22px 28px 0 28px;">
-        <a href="{_DASHBOARD_URL}/admin/price-review" style="display:inline-block;background:{_PS_HEAD};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 20px;border-radius:8px;">Review &amp; apply held changes →</a>
+        <a href="{_review_url}" style="display:inline-block;background:{_PS_HEAD};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 20px;border-radius:8px;">Review &amp; apply held changes →</a>
       </td></tr>""" if counts.get("held") else ""
 
     oos = summary.get("out_of_stock", 0)
