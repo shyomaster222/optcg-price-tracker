@@ -115,10 +115,26 @@ def trigger_report():
 
 @admin_bp.route("/run-scraper", methods=["POST"])
 def trigger_scraper():
-    from app.scrapers.scraper_manager import ScraperManager
-    results = ScraperManager().run_all()
-    summary = {name: len(data) for name, data in results.items()}
-    return jsonify({"status": "ok", "results": summary})
+    """Kick off a full scrape in a background thread and return immediately.
+
+    Running run_all() inline would block the single web worker (and hit Railway's
+    ~60s edge timeout), so it runs detached; poll /admin/fuji-urls for freshness."""
+    from threading import Thread
+    from flask import current_app
+
+    app_obj = current_app._get_current_object()
+
+    def _bg():
+        with app_obj.app_context():
+            try:
+                from app.scrapers.scraper_manager import ScraperManager
+                ScraperManager().run_all()
+            except Exception:
+                app_obj.logger.exception("manual scrape failed")
+
+    Thread(target=_bg, daemon=True).start()
+    return jsonify({"status": "started",
+                    "note": "scrape running in background; check /admin/fuji-urls in ~1-2 min"})
 
 
 @admin_bp.route("/run-price-sync", methods=["POST"])
