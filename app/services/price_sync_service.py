@@ -295,8 +295,8 @@ def apply_one(variant_id: int) -> dict:
     if target < floor:
         return {"ok": False, "error": f"target ${target:.2f} below floor ${floor:.2f}"}
 
-    ok, err = rcj_shopify.update_variant_price(product_id, variant_id, target)
-    dry_run = cfg.get("PRICE_SYNC_DRY_RUN", True)
+    # Manual apply from the review page is an explicit approval -> force a real write.
+    ok, err = rcj_shopify.update_variant_price(product_id, variant_id, target, force_live=True)
     db.session.add(PriceSyncLog(
         set_code=e.get("set_code"), product_type=e.get("product_type"),
         rcj_handle=e.get("rcj_handle"), rcj_variant_id=int(variant_id),
@@ -305,9 +305,9 @@ def apply_one(variant_id: int) -> dict:
         pct_change=(target - current) / current if current else None,
         action=AUTO_APPLIED if ok else ERROR,
         reason="manual apply" if ok else f"manual apply failed: {err}",
-        applied=ok and not dry_run, dry_run=dry_run,
+        applied=ok, dry_run=False,
     ))
     db.session.commit()
     if not ok:
         return {"ok": False, "error": err, "target": target, "current": current}
-    return {"ok": True, "target": target, "current": current, "applied": not dry_run, "dry_run": dry_run}
+    return {"ok": True, "target": target, "current": current, "applied": True, "dry_run": False}
