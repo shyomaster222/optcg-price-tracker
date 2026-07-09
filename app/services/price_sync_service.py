@@ -105,12 +105,14 @@ def run_price_sync() -> dict:
         logger.error("price_sync: fujicardshop retailer not found in DB")
         return summary
 
-    # Current RCJ prices, indexed by variant id (one live fetch for the whole catalog).
+    # Current RCJ prices for just the mapped variants, via the authenticated Admin
+    # API (avoids the rate-limited public products.json).
     try:
-        rcj_prices = rcj_shopify.fetch_current_prices()
+        variant_ids = [int(e["rcj_variant_id"]) for e in entries]
+        rcj_prices = rcj_shopify.fetch_prices_by_variant_ids(variant_ids)
     except Exception as exc:
         summary["note"] = f"failed to fetch RCJ prices: {exc}"
-        logger.error("price_sync: could not fetch RCJ products.json: %s", exc)
+        logger.error("price_sync: could not fetch RCJ prices via Admin API: %s", exc)
         return summary
 
     for e in entries:
@@ -240,7 +242,7 @@ def apply_one(variant_id: int) -> dict:
     if fuji is None:
         return {"ok": False, "error": "fujicardshop retailer missing"}
 
-    rcj_prices = rcj_shopify.fetch_current_prices()
+    rcj_prices = rcj_shopify.fetch_prices_by_variant_ids([int(variant_id)])
     live = rcj_prices.get(int(variant_id))
     if not live:
         return {"ok": False, "error": "variant not found in live RCJ catalog"}
