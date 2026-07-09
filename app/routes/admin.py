@@ -264,6 +264,26 @@ def price_review():
     return Response(html, mimetype="text/html")
 
 
+@admin_bp.route("/debug-fuji-api")
+def debug_fuji_api():
+    """Test from Railway whether Fuji's JSON Store API is reachable (vs the CF-blocked
+    web page). If this returns 200, we can scrape Fuji from Railway again (no Mac)."""
+    from app.scrapers.fujicardshop_scraper import FujiCardShopScraper
+    s = FujiCardShopScraper()
+    out = {}
+    targets = {
+        "store_api": "https://www.fujicardshop.com/wp-json/wc/store/v1/products?per_page=3",
+        "category_page": "https://www.fujicardshop.com/product-category/one-piece/?currency=USD",
+    }
+    for name, url in targets.items():
+        try:
+            r = s.fetch(url)
+            out[name] = {"status": r.status_code, "len": len(r.text), "sample": r.text[:120]}
+        except Exception as e:
+            out[name] = {"error": str(e)[:120]}
+    return jsonify(out)
+
+
 @admin_bp.route("/ingest-fuji", methods=["POST"])
 def ingest_fuji():
     """Ingest Fuji price rows scraped elsewhere (Railway's IP is Cloudflare-blocked).
