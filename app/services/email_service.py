@@ -462,6 +462,40 @@ def _ps_section(title, subtitle, results, action, accent, applied_view=False) ->
       </td></tr>"""
 
 
+def _ps_nofuji_section(results: list, show: bool) -> str:
+    """Bottom section: products you carry that Fuji doesn't list (never adjusted)."""
+    if not show:
+        return ""
+    rows = [r for r in results
+            if r["action"] == "skipped" and "no fresh Fuji" in (r.get("reason") or "")]
+    if not rows:
+        return ""
+    body = ""
+    for i, r in enumerate(rows):
+        bg = "#ffffff" if i % 2 == 0 else "#fafbfc"
+        body += f"""
+        <tr style="background:{bg};">
+          <td style="padding:9px 12px;border-bottom:1px solid {_PS_LINE};font-size:14px;font-weight:600;color:{_PS_INK};white-space:nowrap;">{r.get('set_code','')} <span style="color:{_PS_MUTED};font-weight:400;">{r.get('product_type','')}</span></td>
+          <td style="padding:9px 12px;border-bottom:1px solid {_PS_LINE};font-size:14px;text-align:right;font-variant-numeric:tabular-nums;">{_fmt_stock(r.get('inventory'))}</td>
+          <td style="padding:9px 12px;border-bottom:1px solid {_PS_LINE};font-size:14px;text-align:right;color:{_PS_MUTED};font-variant-numeric:tabular-nums;">{_fmt_usd(r.get('current_price'))}</td>
+        </tr>"""
+    return f"""
+      <tr><td style="padding:26px 28px 0 28px;">
+        <div style="border-left:3px solid {_PS_MUTED};padding-left:10px;margin-bottom:12px;">
+          <div style="font-size:15px;font-weight:700;color:{_PS_INK};">Not tracked — Fuji doesn't list these</div>
+          <div style="font-size:12px;color:{_PS_MUTED};margin-top:2px;">No Fuji price to compare against, so these are never auto-adjusted — price them by hand. Most are out of stock anyway.</div>
+        </div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid {_PS_LINE};border-radius:8px;overflow:hidden;">
+          <thead><tr style="background:{_PS_BG};">
+            <th align="left" style="padding:8px 12px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:{_PS_MUTED};font-weight:600;">Product</th>
+            <th align="right" style="padding:8px 12px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:{_PS_MUTED};font-weight:600;">Stock</th>
+            <th align="right" style="padding:8px 12px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:{_PS_MUTED};font-weight:600;">Your price</th>
+          </tr></thead>
+          <tbody>{body}</tbody>
+        </table>
+      </td></tr>"""
+
+
 def _ps_stat(label, value, color) -> str:
     return f"""<td align="center" style="padding:14px 8px;border:1px solid {_PS_LINE};background:#ffffff;">
         <div style="font-size:26px;font-weight:700;color:{color};font-variant-numeric:tabular-nums;line-height:1;">{value}</div>
@@ -505,6 +539,9 @@ def _build_price_sync_html(summary: dict) -> str:
         applied_title, applied_sub, results, "auto_applied", _PS_GREEN) if counts.get("auto_applied") else ""
     errors_section = _ps_section(
         "Errors", "These did not update — worth a look.", results, "error", _PS_RED) if counts.get("error") else ""
+    # Show the "Fuji doesn't list these" section only when data is fresh (when stale,
+    # everything skips for the same reason and the banner already explains it).
+    nofuji_section = _ps_nofuji_section(results, not summary.get("fuji_stale"))
 
     review_btn = f"""
       <tr><td style="padding:22px 28px 0 28px;">
@@ -547,6 +584,7 @@ def _build_price_sync_html(summary: dict) -> str:
         {review_section}
         {applied_section}
         {errors_section}
+        {nofuji_section}
 
         <tr><td style="padding:26px 28px 28px 28px;">
           <hr style="border:none;border-top:1px solid {_PS_LINE};margin:0 0 14px 0;">
