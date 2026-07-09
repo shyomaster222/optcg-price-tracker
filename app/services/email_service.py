@@ -408,10 +408,18 @@ _PS_RED = "#b42318"
 _PS_BLUE = "#2b5c8a"
 
 
+def _fmt_stock(inv) -> str:
+    if inv is None:
+        return f'<span style="color:{_PS_MUTED};">—</span>'
+    if inv <= 0:
+        return f'<span style="color:{_PS_RED};font-weight:700;">Out</span>'
+    return f'<span style="color:{_PS_INK};">{inv}</span>'
+
+
 def _ps_rows(results: list, action: str, applied_view: bool) -> str:
     rows = [r for r in results if r["action"] == action]
     if not rows:
-        return (f'<tr><td colspan="5" style="padding:14px;text-align:center;color:{_PS_MUTED};'
+        return (f'<tr><td colspan="6" style="padding:14px;text-align:center;color:{_PS_MUTED};'
                 f'font-size:13px;">None</td></tr>')
     out = ""
     for i, r in enumerate(rows):
@@ -423,6 +431,7 @@ def _ps_rows(results: list, action: str, applied_view: bool) -> str:
         out += f"""
         <tr style="background:{bg};">
           <td style="padding:10px 12px;border-bottom:1px solid {_PS_LINE};font-size:14px;font-weight:600;color:{_PS_INK};white-space:nowrap;">{r.get('set_code','')} <span style="color:{_PS_MUTED};font-weight:400;">{r.get('product_type','')}</span></td>
+          <td style="{num}">{_fmt_stock(r.get('inventory'))}</td>
           <td style="{num}color:{_PS_MUTED};">{_fmt_usd(r.get('current_price'))}</td>
           <td style="{num}color:{_PS_MUTED};">{_fmt_usd(r.get('fuji_price'))}</td>
           <td style="{num}color:{_PS_INK};font-weight:700;">{_fmt_usd(r.get('target_price'))}</td>
@@ -442,6 +451,7 @@ def _ps_section(title, subtitle, results, action, accent, applied_view=False) ->
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid {_PS_LINE};border-radius:8px;overflow:hidden;">
           <thead><tr style="background:{_PS_BG};">
             <th align="left" style="padding:8px 12px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:{_PS_MUTED};font-weight:600;">Product</th>
+            <th align="right" style="padding:8px 12px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:{_PS_MUTED};font-weight:600;">Stock</th>
             <th align="right" style="padding:8px 12px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:{_PS_MUTED};font-weight:600;">Current</th>
             <th align="right" style="padding:8px 12px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:{_PS_MUTED};font-weight:600;">Fuji</th>
             <th align="right" style="padding:8px 12px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:{_PS_MUTED};font-weight:600;">New price</th>
@@ -501,6 +511,10 @@ def _build_price_sync_html(summary: dict) -> str:
         <a href="{_DASHBOARD_URL}/admin/price-review" style="display:inline-block;background:{_PS_HEAD};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 20px;border-radius:8px;">Review &amp; apply held changes →</a>
       </td></tr>""" if counts.get("held") else ""
 
+    oos = summary.get("out_of_stock", 0)
+    oos_note = (f' <b>{oos}</b> of these are out of stock on your store (marked <span style="color:{_PS_RED};font-weight:700;">Out</span>) — usually not worth repricing.'
+                if oos else "")
+
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:{_PS_BG};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
@@ -539,7 +553,7 @@ def _build_price_sync_html(summary: dict) -> str:
           <div style="font-size:12px;color:{_PS_MUTED};line-height:1.6;">
             New price = Fuji price minus your undercut. Changes within tolerance apply automatically;
             bigger moves and anything below your floor wait for you. Unchanged items were already on target,
-            or Fuji was out of stock.
+            or Fuji was out of stock.{oos_note}
           </div>
         </td></tr>
 

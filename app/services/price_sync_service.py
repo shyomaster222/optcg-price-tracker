@@ -27,6 +27,7 @@ from sqlalchemy import func
 from app.extensions import db
 from app.models.price import PriceHistory
 from app.models.price_sync_log import PriceSyncLog
+from app.models.product import Product
 from app.models.retailer import Retailer
 from app.services import rcj_shopify
 from app.services.price_sync_config import load_price_map, load_price_floors
@@ -46,13 +47,21 @@ def round_price(value: float, round_99: bool) -> float:
     return round(value, 2)
 
 
-def _latest_fuji_price(fuji_retailer_id: int, fuji_url: str, fresh_since: datetime) -> Optional[dict]:
-    """Latest fresh, in-stock Fuji price row matching this exact URL. Returns dict or None."""
+def _latest_fuji_price(fuji_retailer_id: int, set_code: str, product_type: str,
+                       fresh_since: datetime) -> Optional[dict]:
+    """Latest fresh Fuji price for this (set_code, product_type).
+
+    Matches on the product identity, not the Fuji URL — so a changed Fuji
+    permalink can't silently drop a product from the sync. (set_code, product_type)
+    is unique per Fuji product, and set-code detection is now reliable."""
+    prod = Product.query.filter_by(set_code=set_code, product_type=product_type).first()
+    if prod is None:
+        return None
     row = (
         PriceHistory.query
         .filter(
             PriceHistory.retailer_id == fuji_retailer_id,
-            PriceHistory.source_url == fuji_url,
+            PriceHistory.product_id == prod.id,
             PriceHistory.scraped_at >= fresh_since,
         )
         .order_by(PriceHistory.scraped_at.desc())
@@ -63,7 +72,8 @@ def _latest_fuji_price(fuji_retailer_id: int, fuji_url: str, fresh_since: dateti
     price = row.price_usd if row.price_usd is not None else row.price
     if price is None:
         return None
-    return {"price": float(price), "in_stock": bool(row.in_stock), "scraped_at": row.scraped_at}
+    return {"price": float(price), "in_stock": bool(row.in_stock),
+            "scraped_at": row.scraped_at, "source_url": row.source_url}
 
 
 def run_price_sync() -> dict:
@@ -128,6 +138,7 @@ def run_price_sync() -> dict:
             "target_price": None,
             "floor_price": None,
             "pct_change": None,
+            "inventory": None,
             "action": SKIPPED,
             "reason": "",
             "applied": False,
@@ -142,11 +153,12 @@ def run_price_sync() -> dict:
         current = live["price"]
         product_id = live.get("product_id") or e.get("rcj_product_id")
         result["current_price"] = current
+        result["inventory"] = live.get("inventory")
 
         # --- latest Fuji price ---
-        fuji_row = _latest_fuji_price(fuji.id, e["fuji_url"], fresh_since)
+        fuji_row = _latest_fuji_price(fuji.id, e.get("set_code"), e.get("product_type"), fresh_since)
         if fuji_row is None:
-            result["reason"] = "no fresh Fuji price for this URL"
+            result["reason"] = "no fresh Fuji price"
             _record(result, dry_run, summary)
             continue
         if not fuji_row["in_stock"]:
@@ -194,21 +206,27 @@ def run_price_sync() -> dict:
 
         _record(result, dry_run, summary)
 
-    # Data-freshness alarm: if products are skipping because Fuji data is stale,
-    # surface it loudly so a silent scrape outage can't hide again.
-    stale_count = sum(1 for r in summary["results"] if "no fresh Fuji" in (r["reason"] or ""))
+    # Data-freshness alarm keyed on the AGE OF THE NEWEST Fuji row overall (a scrape
+    # outage), NOT per-product skips — a product Fuji simply doesn't carry must not
+    # trip the alarm. This is what makes a silent outage impossible to miss.
+    fresh_hours = cfg.get("FUJI_FRESH_HOURS", 48)
     newest = (
         PriceHistory.query.filter_by(retailer_id=fuji.id)
         .order_by(PriceHistory.scraped_at.desc()).first()
     )
     newest_at = newest.scraped_at if newest else None
+    age_hours = (round((datetime.utcnow() - newest_at).total_seconds() / 3600, 1)
+                 if newest_at is not None else None)
     summary["fuji_last_scraped"] = newest_at.isoformat() if newest_at else None
-    summary["fuji_stale_count"] = stale_count
-    summary["fuji_stale"] = stale_count > 0
-    if newest_at is not None:
-        summary["fuji_age_hours"] = round((datetime.utcnow() - newest_at).total_seconds() / 3600, 1)
-    else:
-        summary["fuji_age_hours"] = None
+    summary["fuji_age_hours"] = age_hours
+    summary["fuji_stale"] = newest_at is None or age_hours > fresh_hours
+    # Products that couldn't be priced because Fuji has no current listing for them.
+    summary["fuji_stale_count"] = sum(
+        1 for r in summary["results"] if "no fresh Fuji" in (r["reason"] or "")
+    )
+    summary["out_of_stock"] = sum(
+        1 for r in summary["results"] if r.get("inventory") is not None and r["inventory"] <= 0
+    )
 
     db.session.commit()
     logger.info("price_sync: done — %s (fuji_stale=%s, age=%sh)",
@@ -266,9 +284,9 @@ def apply_one(variant_id: int) -> dict:
     current = live["price"]
     product_id = live.get("product_id") or e.get("rcj_product_id")
 
-    fuji_row = _latest_fuji_price(fuji.id, e["fuji_url"], fresh_since)
+    fuji_row = _latest_fuji_price(fuji.id, e.get("set_code"), e.get("product_type"), fresh_since)
     if fuji_row is None:
-        return {"ok": False, "error": "no fresh Fuji price for this URL"}
+        return {"ok": False, "error": "no fresh Fuji price"}
 
     target = round_price(fuji_row["price"] * (1 - undercut), round_99)
     configured_floor = floors.get(e.get("set_code"), e.get("product_type"))

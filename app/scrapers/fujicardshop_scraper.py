@@ -14,8 +14,28 @@ class FujiCardShopScraper(BaseScraper):
     BASE_URL = "https://www.fujicardshop.com"
     CATEGORY_PATH = "/product-category/one-piece/"
 
-    # Force gzip/deflate only — requests can't decompress brotli
-    EXTRA_HEADERS = {"Accept-Encoding": "gzip, deflate"}
+    # Fuji sits behind Cloudflare, which 403s minimal/bot-like requests. A full,
+    # self-consistent browser header set (Chrome UA + matching sec-ch-ua + Sec-Fetch
+    # + Referer) passes. Keep Accept-Encoding gzip/deflate only — requests can't
+    # decompress brotli. (This was the cause of the ~5-week Fuji scrape outage.)
+    EXTRA_HEADERS = {
+        "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                       "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),
+        "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
+                   "image/avif,image/webp,*/*;q=0.8"),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate",
+        "Referer": "https://www.fujicardshop.com/",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-User": "?1",
+        "sec-ch-ua": '"Chromium";v="126", "Google Chrome";v="126", "Not.A/Brand";v="24"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"macOS"',
+        "Connection": "keep-alive",
+    }
 
     SET_PATTERNS = {
         'OP-01': r'OP-?01|romance\s*dawn',

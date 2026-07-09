@@ -88,7 +88,7 @@ def fetch_current_prices() -> Dict[int, dict]:
 _VARIANTS_QUERY = """
 query($ids: [ID!]!) {
   nodes(ids: $ids) {
-    ... on ProductVariant { id price availableForSale product { id } }
+    ... on ProductVariant { id price availableForSale inventoryQuantity product { id } }
   }
 }
 """.strip()
@@ -129,6 +129,7 @@ def fetch_prices_by_variant_ids(variant_ids) -> Dict[int, dict]:
                 "price": price,
                 "product_id": node.get("product", {}).get("id"),
                 "available": bool(node.get("availableForSale")),
+                "inventory": node.get("inventoryQuantity"),
             }
     return out
 
