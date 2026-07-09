@@ -48,9 +48,10 @@ class ShopifyConfigError(RuntimeError):
 # ---------------------------------------------------------------------------
 
 def fetch_current_prices() -> Dict[int, dict]:
-    """Return {variant_id: {price, product_id, available, title}} for the whole catalog.
-
-    Prices are floats in the store's base currency (USD for RCJ)."""
+    """Return {variant_id: {price, product_id, available, title}} for the whole catalog
+    via the public products.json. NOTE: the storefront JSON is aggressively
+    rate-limited (429) from shared/cloud IPs. Prefer fetch_prices_by_variant_ids()
+    (authenticated Admin API) for the sync; this remains for local/offline use."""
     out: Dict[int, dict] = {}
     for path in _COLLECTION_PATHS:
         page = 1
@@ -81,6 +82,54 @@ def fetch_current_prices() -> Dict[int, dict]:
             if len(products) < 250:
                 break
             page += 1
+    return out
+
+
+_VARIANTS_QUERY = """
+query($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on ProductVariant { id price availableForSale product { id } }
+  }
+}
+""".strip()
+
+
+def fetch_prices_by_variant_ids(variant_ids) -> Dict[int, dict]:
+    """Return {variant_id: {price, product_id, available}} via the authenticated
+    Admin GraphQL API (not the rate-limited storefront JSON). Only fetches the
+    given variants. Batches ids to stay well under node limits."""
+    token = current_app.config.get("SHOPIFY_ADMIN_TOKEN")
+    if not token:
+        raise ShopifyConfigError("SHOPIFY_ADMIN_TOKEN is not configured")
+
+    ids = [int(v) for v in variant_ids]
+    out: Dict[int, dict] = {}
+    for i in range(0, len(ids), 200):
+        chunk = ids[i:i + 200]
+        gids = [_gid("ProductVariant", v) for v in chunk]
+        resp = requests.post(
+            _graphql_endpoint(),
+            headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"},
+            json={"query": _VARIANTS_QUERY, "variables": {"ids": gids}},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        if body.get("errors"):
+            raise RuntimeError(f"Admin API errors: {body['errors']}")
+        for node in (body.get("data") or {}).get("nodes") or []:
+            if not node or "id" not in node:
+                continue
+            try:
+                vid = int(str(node["id"]).split("/")[-1])
+                price = float(node["price"])
+            except (TypeError, ValueError):
+                continue
+            out[vid] = {
+                "price": price,
+                "product_id": node.get("product", {}).get("id"),
+                "available": bool(node.get("availableForSale")),
+            }
     return out
 
 
