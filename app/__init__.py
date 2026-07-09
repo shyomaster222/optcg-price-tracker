@@ -148,7 +148,7 @@ def _start_scheduler(app: Flask) -> None:
 
     scheduler.add_job(
         _price_sync_job,
-        trigger=CronTrigger(hour=4, minute=30),  # 30 min after the daily email; data is fresh
+        trigger=CronTrigger(hour=1, minute=0),  # 09:00 Hong Kong time (UTC+8)
         id="price_sync",
         replace_existing=True,
     )
