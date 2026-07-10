@@ -43,10 +43,9 @@ class Config:
     UNDERCUT_PCT = float(os.environ.get('UNDERCUT_PCT', '0.03'))       # target = fuji * (1 - this)
     AUTO_TOLERANCE = float(os.environ.get('AUTO_TOLERANCE', '0.05'))   # auto-apply if |change| <= this
     MAX_DROP = float(os.environ.get('MAX_DROP', '0.30'))              # relative safety floor vs current
-    NOOP_EPSILON = float(os.environ.get('NOOP_EPSILON', '0.01'))     # skip changes smaller than this fraction
-    NOOP_EPSILON_USD = float(os.environ.get('NOOP_EPSILON_USD', '0.50'))  # ...and smaller than this many USD
     FUJI_FRESH_HOURS = int(os.environ.get('FUJI_FRESH_HOURS', '48'))  # ignore Fuji prices older than this
-    PRICE_ROUND_99 = os.environ.get('PRICE_ROUND_99', 'false').lower() == 'true'  # round to .99 endings
+    # Rounding of the target price: "dollar" (nearest whole $), "cent" (2 dp), "99" (.99 ending)
+    PRICE_ROUNDING = os.environ.get('PRICE_ROUNDING', 'dollar')
 
     # Config file locations (repo-root relative by default)
     PRICE_MAP_PATH = os.environ.get('PRICE_MAP_PATH', 'price_map.json')

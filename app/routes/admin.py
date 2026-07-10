@@ -222,7 +222,7 @@ def price_review():
         stock = {}
 
     def fmt(v):
-        return f"${float(v):.2f}" if v is not None else "—"
+        return f"${float(v):.0f}" if v is not None else "—"
 
     def stock_cell(vid):
         inv = (stock.get(int(vid)) or {}).get("inventory")

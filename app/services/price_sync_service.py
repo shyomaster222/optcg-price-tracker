@@ -40,11 +40,13 @@ SKIPPED = "skipped"
 ERROR = "error"
 
 
-def round_price(value: float, round_99: bool) -> float:
-    if round_99:
+def round_price(value: float, mode: str = "dollar") -> float:
+    if mode == "99":
         base = round(value)
         return float(base - 0.01) if base >= 1 else round(value, 2)
-    return round(value, 2)
+    if mode == "cent":
+        return round(value, 2)
+    return float(round(value))  # nearest whole dollar (default)
 
 
 def _latest_fuji_price(fuji_retailer_id: int, set_code: str, product_type: str,
@@ -104,9 +106,7 @@ def run_price_sync() -> dict:
     undercut = cfg.get("UNDERCUT_PCT", 0.03)
     tolerance = cfg.get("AUTO_TOLERANCE", 0.05)
     max_drop = cfg.get("MAX_DROP", 0.30)
-    eps = cfg.get("NOOP_EPSILON", 0.01)
-    eps_usd = cfg.get("NOOP_EPSILON_USD", 0.50)
-    round_99 = cfg.get("PRICE_ROUND_99", False)
+    rounding = cfg.get("PRICE_ROUNDING", "dollar")
     fresh_since = datetime.utcnow() - timedelta(hours=cfg.get("FUJI_FRESH_HOURS", 48))
 
     fuji = Retailer.query.filter_by(slug="fujicardshop").first()
@@ -174,7 +174,7 @@ def run_price_sync() -> dict:
             continue
 
         # --- target + guardrails ---
-        target = round_price(fuji_price * (1 - undercut), round_99)
+        target = round_price(fuji_price * (1 - undercut), rounding)
         configured_floor = floors.get(e.get("set_code"), e.get("product_type"))
         relative_floor = current * (1 - max_drop)
         floor = max(relative_floor, configured_floor) if configured_floor is not None else relative_floor
@@ -186,17 +186,17 @@ def run_price_sync() -> dict:
 
         if target < floor:
             result["action"] = HELD
-            result["reason"] = f"target ${target:.2f} below floor ${floor:.2f}"
-        elif abs(change) < eps and abs(target - current) < eps_usd:
+            result["reason"] = f"target ${target:.0f} below floor ${floor:.0f}"
+        elif abs(target - current) < 0.01:
             result["action"] = SKIPPED
-            result["reason"] = "no meaningful change"
+            result["reason"] = "already on target"
         elif abs(change) <= tolerance:
             ok, err = rcj_shopify.update_variant_price(product_id, variant_id, target)
             if ok:
                 result["action"] = AUTO_APPLIED
                 result["applied"] = not dry_run
                 result["reason"] = ("dry-run: would apply" if dry_run
-                                    else f"applied {current:.2f} -> {target:.2f}")
+                                    else f"applied ${current:.0f} -> ${target:.0f}")
             else:
                 result["action"] = ERROR
                 result["reason"] = f"Shopify update failed: {err}"
@@ -270,7 +270,7 @@ def apply_one(variant_id: int) -> dict:
     floors = load_price_floors()
     undercut = cfg.get("UNDERCUT_PCT", 0.03)
     max_drop = cfg.get("MAX_DROP", 0.30)
-    round_99 = cfg.get("PRICE_ROUND_99", False)
+    rounding = cfg.get("PRICE_ROUNDING", "dollar")
     fresh_since = datetime.utcnow() - timedelta(hours=cfg.get("FUJI_FRESH_HOURS", 48))
 
     fuji = Retailer.query.filter_by(slug="fujicardshop").first()
@@ -288,12 +288,12 @@ def apply_one(variant_id: int) -> dict:
     if fuji_row is None:
         return {"ok": False, "error": "no fresh Fuji price"}
 
-    target = round_price(fuji_row["price"] * (1 - undercut), round_99)
+    target = round_price(fuji_row["price"] * (1 - undercut), rounding)
     configured_floor = floors.get(e.get("set_code"), e.get("product_type"))
     relative_floor = current * (1 - max_drop)
     floor = max(relative_floor, configured_floor) if configured_floor is not None else relative_floor
     if target < floor:
-        return {"ok": False, "error": f"target ${target:.2f} below floor ${floor:.2f}"}
+        return {"ok": False, "error": f"target ${target:.0f} below floor ${floor:.0f}"}
 
     # Manual apply from the review page is an explicit approval -> force a real write.
     ok, err = rcj_shopify.update_variant_price(product_id, variant_id, target, force_live=True)
