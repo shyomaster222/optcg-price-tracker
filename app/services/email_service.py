@@ -263,6 +263,13 @@ def _fmt_usd(value: Optional[float]) -> str:
     return f"${value:,.2f}"
 
 
+def _fmt_usd0(value) -> str:
+    """Whole-dollar formatting for the price-sync email (prices are rounded to $1)."""
+    if value is None:
+        return "—"
+    return f"${value:,.0f}"
+
+
 def _fmt_pct(value: Optional[float]) -> str:
     if value is None:
         return "—"
@@ -472,9 +479,9 @@ def _ps_rows(results: list, action: str, applied_view: bool) -> str:
         <tr style="background:{bg};">
           <td style="padding:10px 12px;border-bottom:1px solid {_PS_LINE};font-size:14px;font-weight:600;color:{_PS_INK};white-space:nowrap;">{r.get('set_code','')} <span style="color:{_PS_MUTED};font-weight:400;">{r.get('product_type','')}</span></td>
           <td style="{num}">{_fmt_stock(r.get('inventory'))}</td>
-          <td style="{num}color:{_PS_MUTED};">{_fmt_usd(r.get('current_price'))}</td>
-          <td style="{num}color:{_PS_MUTED};">{_fmt_usd(r.get('fuji_price'))}</td>
-          <td style="{num}color:{_PS_INK};font-weight:700;">{_fmt_usd(r.get('target_price'))}</td>
+          <td style="{num}color:{_PS_MUTED};">{_fmt_usd0(r.get('current_price'))}</td>
+          <td style="{num}color:{_PS_MUTED};">{_fmt_usd0(r.get('fuji_price'))}</td>
+          <td style="{num}color:{_PS_INK};font-weight:700;">{_fmt_usd0(r.get('target_price'))}</td>
           <td style="{num}color:{pct_color};font-weight:600;">{_fmt_pct(pct)}</td>
         </tr>"""
     return out
@@ -517,7 +524,7 @@ def _ps_nofuji_section(results: list, show: bool) -> str:
         <tr style="background:{bg};">
           <td style="padding:9px 12px;border-bottom:1px solid {_PS_LINE};font-size:14px;font-weight:600;color:{_PS_INK};white-space:nowrap;">{r.get('set_code','')} <span style="color:{_PS_MUTED};font-weight:400;">{r.get('product_type','')}</span></td>
           <td style="padding:9px 12px;border-bottom:1px solid {_PS_LINE};font-size:14px;text-align:right;font-variant-numeric:tabular-nums;">{_fmt_stock(r.get('inventory'))}</td>
-          <td style="padding:9px 12px;border-bottom:1px solid {_PS_LINE};font-size:14px;text-align:right;color:{_PS_MUTED};font-variant-numeric:tabular-nums;">{_fmt_usd(r.get('current_price'))}</td>
+          <td style="padding:9px 12px;border-bottom:1px solid {_PS_LINE};font-size:14px;text-align:right;color:{_PS_MUTED};font-variant-numeric:tabular-nums;">{_fmt_usd0(r.get('current_price'))}</td>
         </tr>"""
     return f"""
       <tr><td style="padding:26px 28px 0 28px;">
