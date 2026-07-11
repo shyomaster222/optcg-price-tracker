@@ -297,13 +297,17 @@ def _scraper_freshness_html() -> str:
         rows.append((r.name, age))
     if not rows:
         return ""
-    rows.sort(key=lambda x: x[1])
-    any_stale = any(age > 48 for _, age in rows)
+    # age can be None (a scraper that has never produced data) — guard the comparisons.
+    rows.sort(key=lambda x: (x[1] is None, x[1]))
+    any_stale = any(age is None or age > 48 for _, age in rows)
     cells = ""
     for name, age in rows:
-        stale = age > 48
+        stale = age is None or age > 48
         color = "#c0392b" if stale else "#157347"
-        label = (f"{age:.0f}h ago" if age < 48 else f"{age/24:.0f} days ago ⚠")
+        if age is None:
+            label = "never ⚠"
+        else:
+            label = (f"{age:.0f}h ago" if age < 48 else f"{age/24:.0f} days ago ⚠")
         cells += (f'<tr><td style="padding:6px 10px;border:1px solid #eee;">{name}</td>'
                   f'<td style="padding:6px 10px;border:1px solid #eee;text-align:right;color:{color};font-weight:600;">{label}</td></tr>')
     banner = ('<p style="background:#fdecea;color:#b42318;padding:10px;border-radius:4px;font-weight:bold;">'

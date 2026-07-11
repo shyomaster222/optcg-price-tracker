@@ -121,8 +121,11 @@ def _start_scheduler(app: Flask) -> None:
     # -- Daily email report ------------------------------------------------
     def _daily_email_job():
         with app.app_context():
-            from app.tasks.daily_email import send_daily_price_report
-            send_daily_price_report()
+            try:
+                from app.tasks.daily_email import send_daily_price_report
+                send_daily_price_report()
+            except Exception:
+                logger.exception("daily_email job failed")
 
     scheduler.add_job(
         _daily_email_job,
