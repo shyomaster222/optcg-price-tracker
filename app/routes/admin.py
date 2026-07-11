@@ -302,6 +302,44 @@ def price_review():
     return Response(html, mimetype="text/html")
 
 
+@admin_bp.route("/debug-email", methods=["POST"])
+def debug_email():
+    """Diagnose the price-sync email: config, last scheduler run, live send status."""
+    import requests as R
+    from app.models.price_sync_log import PriceSyncLog
+    from app.services.price_sync_service import run_price_sync
+    from app.services.email_service import _build_price_sync_html
+
+    cfg = current_app.config
+    out = {
+        "resend_key_set": bool(cfg.get("RESEND_API_KEY")),
+        "company_email": cfg.get("COMPANY_EMAIL"),
+        "price_sync_enabled": cfg.get("PRICE_SYNC_ENABLED"),
+    }
+    last = PriceSyncLog.query.order_by(PriceSyncLog.created_at.desc()).first()
+    out["last_sync_log_at"] = last.created_at.isoformat() if last and last.created_at else None
+
+    if not (cfg.get("RESEND_API_KEY") and cfg.get("COMPANY_EMAIL")):
+        out["error"] = "RESEND_API_KEY or COMPANY_EMAIL not configured"
+        return jsonify(out)
+
+    summary = run_price_sync()
+    html = _build_price_sync_html(summary)
+    try:
+        resp = R.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {cfg['RESEND_API_KEY']}", "Content-Type": "application/json"},
+            json={"from": f"RCJ Price Sync <{cfg['COMPANY_EMAIL']}>", "to": [cfg["COMPANY_EMAIL"]],
+                  "subject": "[RCJ Price Sync] test send", "html": html},
+            timeout=15,
+        )
+        out["resend_status"] = resp.status_code
+        out["resend_body"] = resp.json()
+    except Exception as e:
+        out["send_exception"] = f"{type(e).__name__}: {e}"
+    return jsonify(out)
+
+
 @admin_bp.route("/debug-rcj-admin")
 def debug_rcj_admin():
     """Diagnose why the RCJ Admin-API scraper returns nothing on Railway."""
