@@ -351,6 +351,30 @@
     "note": ""
   },
   {
+    "set_code": "OP-16",
+    "product_type": "box",
+    "rcj_handle": "op-16-the-hour-of-decisive-battle-japanese-one-piece-booster-box",
+    "rcj_variant_id": 47836554723566,
+    "rcj_title": "OP-16 The Hour of Decisive Battle (Japanese) \u2013 One Piece Booster Box",
+    "rcj_current_price": 123.0,
+    "fuji_url": "https://www.fujicardshop.com/product/op-16-the-time-of-battle-booster-box/",
+    "fuji_price_at_build": 115.0,
+    "enabled": true,
+    "note": "added Jul 11 (Fuji now lists OP-16)"
+  },
+  {
+    "set_code": "OP-16",
+    "product_type": "case",
+    "rcj_handle": "op-16-the-hour-of-decisive-battle-japanese-sealed-case-12-boxes",
+    "rcj_variant_id": 47836551217390,
+    "rcj_title": "OP-16 The Hour of Decisive Battle Sealed Case (Japanese) \u2013 One Piece Sealed Case",
+    "rcj_current_price": 1060.0,
+    "fuji_url": "https://www.fujicardshop.com/product/op-16-the-time-of-battle-sealed-case/",
+    "fuji_price_at_build": 1374.0,
+    "enabled": true,
+    "note": "added Jul 11 (Fuji now lists OP-16)"
+  },
+  {
     "set_code": "PRB-01",
     "product_type": "box",
     "rcj_handle": "prb-01-premium-booster-the-best-vol-1-booster-box-japan-version",
