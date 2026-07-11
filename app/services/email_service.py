@@ -54,9 +54,13 @@ def _latest_rcj_price(product_id: int, rcj_retailer_id: int) -> Optional[PriceHi
     )
 
 
+_FRESH_SINCE_DAYS = 7  # ignore competitor prices older than this (dead scrapers)
+
+
 def _cheapest_competitor(product_id: int, exclude_retailer_id: int) -> tuple:
-    """Return (min_price_usd, retailer_name) from all retailers except the excluded one."""
+    """Cheapest IN-STOCK, recent competitor price (excluding the given retailer)."""
     effective = func.coalesce(PriceHistory.price_usd, PriceHistory.price)
+    fresh = datetime.utcnow() - timedelta(days=_FRESH_SINCE_DAYS)
     result = (
         db.session.query(effective, Retailer.name)
         .join(Retailer, PriceHistory.retailer_id == Retailer.id)
@@ -64,6 +68,8 @@ def _cheapest_competitor(product_id: int, exclude_retailer_id: int) -> tuple:
             PriceHistory.product_id == product_id,
             PriceHistory.retailer_id != exclude_retailer_id,
             effective.isnot(None),
+            PriceHistory.in_stock.is_(True),
+            PriceHistory.scraped_at >= fresh,
         )
         .order_by(effective.asc())
         .first()
@@ -89,6 +95,7 @@ def _avg_market_price(product_id: int, exclude_retailer_id: int) -> Optional[flo
         .group_by(PriceHistory.retailer_id)
         .subquery()
     )
+    fresh = datetime.utcnow() - timedelta(days=_FRESH_SINCE_DAYS)
     result = (
         db.session.query(func.avg(effective))
         .join(
@@ -100,6 +107,8 @@ def _avg_market_price(product_id: int, exclude_retailer_id: int) -> Optional[flo
             PriceHistory.product_id == product_id,
             PriceHistory.retailer_id != exclude_retailer_id,
             effective.isnot(None),
+            PriceHistory.in_stock.is_(True),
+            PriceHistory.scraped_at >= fresh,
         )
         .scalar()
     )
@@ -227,7 +236,9 @@ def _build_report() -> dict:
         cheap_diff = _pct_diff(cheapest, rcj_price) if cheapest is not None else None
         avg_diff = _pct_diff(avg_market, rcj_price) if avg_market is not None else None
 
-        flagged = (
+        # Only a real, actionable flag when RCJ is in stock (else you can't sell it).
+        rcj_in_stock = bool(rcj_entry.in_stock)
+        flagged = rcj_in_stock and (
             (cheap_diff is not None and abs(cheap_diff) >= _THRESHOLD_PCT)
             or (avg_diff is not None and abs(avg_diff) >= _THRESHOLD_PCT)
         )
@@ -243,6 +254,7 @@ def _build_report() -> dict:
             "avg_market": avg_market,
             "avg_diff": avg_diff,
             "flagged": flagged,
+            "rcj_in_stock": rcj_in_stock,
         })
 
     # Sort: flagged first, then alphabetically
@@ -338,8 +350,15 @@ def _build_html(report: dict) -> str:
     # --- Table 1: all-competitor summary ---
     rows_html = ""
     for row in report["rows"]:
-        bg = "#fde8e8" if row["flagged"] else "#e8fde8"
-        status = "⚠️ Flagged" if row["flagged"] else "✓ OK"
+        if not row.get("rcj_in_stock", True):
+            bg = "#f3f4f6"
+            status = "⚪ You're out of stock"
+        elif row["flagged"]:
+            bg = "#fde8e8"
+            status = "⚠️ Flagged"
+        else:
+            bg = "#e8fde8"
+            status = "✓ OK"
         cheap_diff_str = _fmt_pct(row["cheap_diff"])
         avg_diff_str = _fmt_pct(row["avg_diff"])
         rows_html += f"""
@@ -413,7 +432,25 @@ def _build_html(report: dict) -> str:
     </a>
   </p>
 
-  <h3 style="color:#444;margin-top:24px;">Market Overview (All Competitors vs RCJ)</h3>
+  <h3 style="color:#444;margin-top:24px;">FujiCardShop vs RCJ</h3>
+  <p style="background:#f5f5f5;padding:12px;border-radius:4px;">{fuji_summary}</p>
+  <table style="border-collapse:collapse;width:100%;font-size:14px;">
+    <thead>
+      <tr style="background:#1a5276;color:#fff;">
+        <th style="padding:10px;border:1px solid #555;text-align:left;">Product</th>
+        <th style="padding:10px;border:1px solid #555;">RCJ Price (USD)</th>
+        <th style="padding:10px;border:1px solid #555;">Fuji Price (USD)</th>
+        <th style="padding:10px;border:1px solid #555;">% Diff (Fuji vs RCJ)</th>
+        <th style="padding:10px;border:1px solid #555;">Stock</th>
+        <th style="padding:10px;border:1px solid #555;">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {fuji_rows_html}
+    </tbody>
+  </table>
+
+  <h3 style="color:#444;margin-top:32px;">Market Overview (All Competitors vs RCJ)</h3>
   <p style="background:#f5f5f5;padding:12px;border-radius:4px;">
     <strong>{within}</strong> products within 5% &nbsp;|&nbsp;
     <strong style="color:#c00;">{flagged}</strong> products flagged (&gt;±5%)
@@ -433,24 +470,6 @@ def _build_html(report: dict) -> str:
     </thead>
     <tbody>
       {rows_html}
-    </tbody>
-  </table>
-
-  <h3 style="color:#444;margin-top:32px;">FujiCardShop vs RCJ</h3>
-  <p style="background:#f5f5f5;padding:12px;border-radius:4px;">{fuji_summary}</p>
-  <table style="border-collapse:collapse;width:100%;font-size:14px;">
-    <thead>
-      <tr style="background:#1a5276;color:#fff;">
-        <th style="padding:10px;border:1px solid #555;text-align:left;">Product</th>
-        <th style="padding:10px;border:1px solid #555;">RCJ Price (USD)</th>
-        <th style="padding:10px;border:1px solid #555;">Fuji Price (USD)</th>
-        <th style="padding:10px;border:1px solid #555;">% Diff (Fuji vs RCJ)</th>
-        <th style="padding:10px;border:1px solid #555;">Stock</th>
-        <th style="padding:10px;border:1px solid #555;">Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      {fuji_rows_html}
     </tbody>
   </table>
 
