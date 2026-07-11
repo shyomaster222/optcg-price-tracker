@@ -157,7 +157,13 @@ def _build_fuji_rows(rcj_id: int) -> list:
         fuji_price = float(fuji_price_raw)
         rcj_price = float(rcj_price_raw)
         diff = _pct_diff(fuji_price, rcj_price)
-        flagged = abs(diff) >= _THRESHOLD_PCT
+        # A big gap is only a REAL, actionable deviation when both sides are in
+        # stock. If either is out of stock, the compared price isn't purchasable,
+        # so don't flag it red — mark it as a stock mismatch instead.
+        rcj_oos = not bool(rcj_entry.in_stock)
+        fuji_oos = not bool(fuji_entry.in_stock)
+        stock_issue = rcj_oos or fuji_oos
+        flagged = (abs(diff) >= _THRESHOLD_PCT) and not stock_issue
 
         name = product.display_name if hasattr(product, "display_name") else f"{product.set_code} {product.product_type}"
         rows.append({
@@ -166,9 +172,13 @@ def _build_fuji_rows(rcj_id: int) -> list:
             "fuji_price_usd": fuji_price,
             "diff": diff,
             "flagged": flagged,
+            "stock_issue": stock_issue,
+            "rcj_oos": rcj_oos,
+            "fuji_oos": fuji_oos,
         })
 
-    rows.sort(key=lambda r: (not r["flagged"], r["product"]))
+    # Order: real flags first, then stock-mismatch, then OK.
+    rows.sort(key=lambda r: (not r["flagged"], not r["stock_issue"], r["product"]))
     return rows
 
 
@@ -359,21 +369,36 @@ def _build_html(report: dict) -> str:
 
     fuji_rows_html = ""
     for row in fuji_rows:
-        bg = "#fde8e8" if row["flagged"] else "#e8fde8"
-        status = "⚠️ Flagged" if row["flagged"] else "✓ OK"
+        fuji_oos, rcj_oos = row.get("fuji_oos"), row.get("rcj_oos")
+        if fuji_oos and rcj_oos:
+            stock, stock_color = "Both out", "#b42318"
+        elif fuji_oos:
+            stock, stock_color = "Fuji out", "#b45309"
+        elif rcj_oos:
+            stock, stock_color = "RCJ out", "#b45309"
+        else:
+            stock, stock_color = "In stock", "#157347"
+
+        if row.get("stock_issue"):
+            # One side unavailable -> the % gap isn't a real deviation.
+            bg, status, diff_style = "#f3f4f6", "—", "color:#6b7280;"
+        elif row["flagged"]:
+            bg, status, diff_style = "#fde8e8", "⚠️ Flagged", "color:#c00;font-weight:bold;"
+        else:
+            bg, status, diff_style = "#e8fde8", "✓ OK", ""
         diff_str = _fmt_pct(row["diff"])
-        diff_style = "color:#c00;font-weight:bold;" if row["flagged"] else ""
         fuji_rows_html += f"""
         <tr style="background:{bg};">
           <td style="padding:8px;border:1px solid #ddd;">{row['product']}</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right;">{_fmt_usd(row['rcj_price_usd'])}</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right;">{_fmt_usd(row['fuji_price_usd'])}</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right;{diff_style}">{diff_str}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:center;color:{stock_color};font-weight:600;">{stock}</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:center;">{status}</td>
         </tr>"""
 
     if not fuji_rows_html:
-        fuji_rows_html = '<tr><td colspan="5" style="padding:16px;text-align:center;color:#666;">No FujiCardShop data available</td></tr>'
+        fuji_rows_html = '<tr><td colspan="6" style="padding:16px;text-align:center;color:#666;">No FujiCardShop data available</td></tr>'
 
     fuji_summary = f"<strong>{fuji_within}</strong> within 5% &nbsp;|&nbsp; <strong style=\"color:#c00;\">{fuji_flagged}</strong> flagged &nbsp;|&nbsp; {len(fuji_rows)} total"
 
@@ -420,6 +445,7 @@ def _build_html(report: dict) -> str:
         <th style="padding:10px;border:1px solid #555;">RCJ Price (USD)</th>
         <th style="padding:10px;border:1px solid #555;">Fuji Price (USD)</th>
         <th style="padding:10px;border:1px solid #555;">% Diff (Fuji vs RCJ)</th>
+        <th style="padding:10px;border:1px solid #555;">Stock</th>
         <th style="padding:10px;border:1px solid #555;">Status</th>
       </tr>
     </thead>
