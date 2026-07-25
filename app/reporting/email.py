@@ -26,6 +26,10 @@ from app.reporting.charts import (
 
 RESEND_EMAILS_URL = "https://api.resend.com/emails"
 RESEND_TIMEOUT = 30
+RCJ_LOGO_URL = (
+    "https://rarecardsjapan.com/cdn/shop/files/"
+    "Rare_Cards_Japan.png?v=1762075467&width=500"
+)
 _EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
 _LONG_NUMBER_RE = re.compile(r"\b\d{7,}\b")
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
@@ -311,8 +315,20 @@ def _gsc_view(value: Any) -> dict[str, Any]:
     result: dict[str, Any] = {
         "status": _safe_dimension(source.get("status"), limit=30),
         "as_of": _safe_dimension(source.get("as_of"), limit=30),
+        "timezone": _safe_dimension(source.get("timezone"), limit=60),
         "query_rows_are_partial": bool(source.get("query_rows_are_partial")),
     }
+    for name in (
+        "weekly_window",
+        "previous_weekly_window",
+        "query_window",
+        "previous_query_window",
+    ):
+        raw_window = _mapping(source.get(name))
+        result[name] = {
+            "start": _safe_dimension(raw_window.get("start"), limit=30),
+            "end": _safe_dimension(raw_window.get("end"), limit=30),
+        }
     for period in ("current", "previous"):
         raw_period = _mapping(source.get(period))
         result[period] = {
@@ -442,6 +458,7 @@ def _view(
         "sales_chart_cid": SALES_CHART_CID,
         "acquisition_chart_cid": ACQUISITION_CHART_CID,
         "countries_stock_chart_cid": COUNTRIES_STOCK_CHART_CID,
+        "rcj_logo_url": RCJ_LOGO_URL,
     }
 
 

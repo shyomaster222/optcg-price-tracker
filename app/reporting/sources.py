@@ -789,6 +789,18 @@ class GoogleSearchConsoleClient:
                 "start": week_start.isoformat(),
                 "end": latest.isoformat(),
             },
+            "previous_weekly_window": {
+                "start": previous_start.isoformat(),
+                "end": previous_end.isoformat(),
+            },
+            "query_window": {
+                "start": query_start.isoformat(),
+                "end": latest.isoformat(),
+            },
+            "previous_query_window": {
+                "start": prior_query_start.isoformat(),
+                "end": prior_query_end.isoformat(),
+            },
             "current": current,
             "previous": previous,
             "comparison": {

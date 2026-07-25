@@ -25,8 +25,8 @@ def report_snapshot():
         "window": {
             "report_date": "2026-07-24",
             "timezone": "Asia/Hong_Kong",
-            "current_start": "2026-07-17T00:00:00+08:00",
-            "current_end": "2026-07-24T00:00:00+08:00",
+            "current_start": "2026-07-18T00:00:00+08:00",
+            "current_end": "2026-07-25T00:00:00+08:00",
         },
         "currency": "USD",
         "weekly": {
@@ -219,6 +219,23 @@ def report_snapshot():
         "gsc": {
             "status": "ok",
             "as_of": "2026-07-22",
+            "timezone": "America/Los_Angeles",
+            "weekly_window": {
+                "start": "2026-07-16",
+                "end": "2026-07-22",
+            },
+            "previous_weekly_window": {
+                "start": "2026-07-09",
+                "end": "2026-07-15",
+            },
+            "query_window": {
+                "start": "2026-06-25",
+                "end": "2026-07-22",
+            },
+            "previous_query_window": {
+                "start": "2026-05-28",
+                "end": "2026-06-24",
+            },
             "current": {
                 "clicks": 120,
                 "impressions": 4_000,
@@ -323,6 +340,14 @@ def test_ai_projection_is_allowlisted_and_excludes_raw_or_query_data(report_snap
     assert "private-search@example.com" not in serialized
     assert "customer name" not in serialized
     assert projection["gsc"]["opportunity_count"] == 1
+    assert projection["gsc"]["weekly_window"] == {
+        "start": "2026-07-16",
+        "end": "2026-07-22",
+    }
+    assert projection["gsc"]["query_window"] == {
+        "start": "2026-06-25",
+        "end": "2026-07-22",
+    }
 
 
 def test_generate_narrative_uses_responses_json_schema_and_all_output_items(
@@ -426,6 +451,13 @@ def test_rendered_email_has_escaped_content_plain_text_and_three_cids(
     assert "&lt;b&gt;Important&lt;/b&gt;" in rendered.html
     assert "Verified <em>summary</em>." in rendered.text
     assert "@media only screen" in rendered.html
+    assert "Rare_Cards_Japan.png" in rendered.html
+    assert "Sales week 18 Jul 2026–24 Jul 2026" in rendered.html
+    assert "Latest 7 finalized days" in rendered.html
+    assert "16 Jul 2026–22 Jul 2026" in rendered.html
+    assert "not month-to-date or daily figures" in rendered.html
+    assert "Latest 28 finalized days" in rendered.html
+    assert "25 Jun 2026–22 Jul 2026" in rendered.html
     assert "Blog assists:" in rendered.html
     assert "/blogs/one-piece-card-guides" in rendered.html
     assert "Last full month" in rendered.html
@@ -439,6 +471,8 @@ def test_rendered_email_has_escaped_content_plain_text_and_three_cids(
     assert "private-search@example.com" not in rendered.html
     assert "https://example.test/private" not in rendered.html
     assert "TOP GOOGLE KEYWORDS" in rendered.text
+    assert "latest 7 finalized days" in rendered.text
+    assert "latest 28 finalized days" in rendered.text
     assert "Last full month net collected revenue: USD 53,000" in rendered.text
     assert "not refunds issued during the week" in rendered.text
     assert "https://example.test/private" not in rendered.text

@@ -93,25 +93,25 @@ def _catalog_variant(
     }
 
 
-def test_default_report_date_changes_at_hong_kong_friday_midnight():
+def test_default_report_date_changes_after_hong_kong_friday_is_complete():
     before = build_report_window(
-        now=datetime(2026, 7, 23, 15, 59, 59, tzinfo=timezone.utc)
+        now=datetime(2026, 7, 24, 15, 59, 59, tzinfo=timezone.utc)
     )
     at_boundary = build_report_window(
-        now=datetime(2026, 7, 23, 16, 0, 0, tzinfo=timezone.utc)
+        now=datetime(2026, 7, 24, 16, 0, 0, tzinfo=timezone.utc)
     )
 
     assert before.report_date.isoformat() == "2026-07-17"
     assert at_boundary.report_date.isoformat() == "2026-07-24"
-    assert at_boundary.current_start.isoformat() == "2026-07-17T00:00:00+08:00"
-    assert at_boundary.current_end.isoformat() == "2026-07-24T00:00:00+08:00"
+    assert at_boundary.current_start.isoformat() == "2026-07-18T00:00:00+08:00"
+    assert at_boundary.current_end.isoformat() == "2026-07-25T00:00:00+08:00"
 
 
 def test_report_window_clamps_prior_month_match_to_shorter_month():
     window = build_report_window("2023-03-31")
 
     assert window.month_start.isoformat() == "2023-03-01T00:00:00+08:00"
-    assert window.month_end.isoformat() == "2023-03-31T00:00:00+08:00"
+    assert window.month_end.isoformat() == "2023-04-01T00:00:00+08:00"
     assert window.prior_month_matched_start.isoformat() == (
         "2023-02-01T00:00:00+08:00"
     )
@@ -125,11 +125,29 @@ def test_explicit_non_friday_report_date_is_rejected():
         build_report_window("2026-08-06")
 
 
+def test_week_ending_friday_includes_orders_processed_on_friday():
+    window = build_report_window("2026-07-24")
+    order = _order(
+        "2026-07-24T14:26:59+08:00",
+        order_id="friday-hawaii-op14",
+        net=1121,
+        lines=[_line("op14case", 1)],
+    )
+
+    result = summarize_shopify([order], [], window)
+
+    assert window.current_start.isoformat() == "2026-07-18T00:00:00+08:00"
+    assert window.current_end.isoformat() == "2026-07-25T00:00:00+08:00"
+    assert result["weekly"]["current"]["orders"] == 1
+    assert result["weekly"]["current"]["net_sales"] == 1121.0
+    assert result["products"]["items"][0]["sku"] == "op14case"
+
+
 def test_weekly_metrics_apply_half_open_boundaries_and_order_exclusions():
     window = build_report_window("2026-08-07")
     orders = [
         _order(
-            "2026-07-31T00:00:00+08:00",
+            "2026-08-01T00:00:00+08:00",
             order_id="start",
             net=80,
             refund=20,
@@ -165,7 +183,7 @@ def test_weekly_metrics_apply_half_open_boundaries_and_order_exclusions():
             lines=[_line("test-item", 5)],
         ),
         _order(
-            "2026-08-07T00:00:00+08:00",
+            "2026-08-08T00:00:00+08:00",
             order_id="at-exclusive-end",
             net=400,
             lines=[_line("end-item", 4)],

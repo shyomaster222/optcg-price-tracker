@@ -1,5 +1,5 @@
 RARE CARDS JAPAN — WEEKLY BUSINESS PULSE
-Week ending {{ report_date|display_date }}{% if window.get('timezone') %} ({{ window.get('timezone') }}){% endif %}
+Sales week: {{ window.get('current_start')|display_date }}–{{ report_date|display_date }}{% if window.get('timezone') %} ({{ window.get('timezone') }}){% endif %}
 {% if is_partial %}
 
 PARTIAL REPORT
@@ -104,14 +104,17 @@ Last full month units: {{ last_month.get('units')|integer }}
 
 ORGANIC SEARCH
 {% if gsc_available %}
+Summary period: latest 7 finalized days, {{ gsc.get('weekly_window', {}).get('start')|display_date }}–{{ gsc.get('weekly_window', {}).get('end')|display_date }}{% if gsc.get('timezone') %} ({{ gsc.get('timezone') }}){% endif %}
+These are weekly totals, not month-to-date or daily figures.
+7-day clicks: {{ gsc.get('current', {}).get('clicks')|integer }}
+7-day impressions: {{ gsc.get('current', {}).get('impressions')|integer }}
+7-day CTR: {{ gsc.get('current', {}).get('ctr')|percent }}
+7-day average position: {{ gsc.get('current', {}).get('position')|decimal(1) }}
 Finalized through: {{ gsc.get('as_of')|display_date }}
-Clicks: {{ gsc.get('current', {}).get('clicks')|integer }}
-Impressions: {{ gsc.get('current', {}).get('impressions')|integer }}
-CTR: {{ gsc.get('current', {}).get('ctr')|percent }}
-Average position: {{ gsc.get('current', {}).get('position')|decimal(1) }}
 {% if gsc.get('query_rows_are_partial') %}Note: query-level rows are partial and may omit anonymized searches.{% endif %}
 
 TOP GOOGLE KEYWORDS
+Period: latest 28 finalized days, {{ gsc.get('query_window', {}).get('start')|display_date }}–{{ gsc.get('query_window', {}).get('end')|display_date }}
 {% for row in gsc_top_queries %}
 - {{ row.get('query') }}: {{ row.get('clicks')|integer }} clicks, {{ row.get('impressions')|integer }} impressions, {{ row.get('ctr')|percent }} CTR, position {{ row.get('position')|decimal(1) }}
 {% else %}
@@ -119,6 +122,7 @@ TOP GOOGLE KEYWORDS
 {% endfor %}
 
 KEYWORD MOVERS
+Comparison: latest 28 finalized days vs {{ gsc.get('previous_query_window', {}).get('start')|display_date }}–{{ gsc.get('previous_query_window', {}).get('end')|display_date }}
 {% for row in gsc_query_movers %}
 - {{ row.get('query') }} [{{ row.get('type') }}]: {{ row.get('clicks')|integer }} clicks ({{ row.get('click_delta')|signed_integer }}), {{ row.get('impressions')|integer }} impressions ({{ row.get('impression_delta')|signed_integer }}), {{ row.get('ctr')|percent }} CTR ({{ row.get('ctr_delta_pp')|signed_decimal(1) }} pp), position {{ row.get('position')|decimal(1) }} ({{ row.get('position_improvement')|signed_decimal(1) }} improvement)
 {% else %}
@@ -146,5 +150,5 @@ READ WITH CONTEXT
 - AI commentary was unavailable or disabled; the narrative was generated deterministically from verified aggregate metrics.
 {% endif %}
 
-Internal business pulse. Windows use inclusive starts and exclusive ends.
+Internal business pulse. Sales totals cover complete Saturday–Friday calendar days.
 No customer-level data is included.

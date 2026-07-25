@@ -6,7 +6,7 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "python scripts/run_weekly_business_report.py"
-# Railway cron schedules are UTC. Friday 01:00 UTC is Friday 09:00 HKT.
-cronSchedule = "0 1 * * 5"
+# Railway cron schedules are UTC. Saturday 01:00 UTC is Saturday 09:00 HKT.
+cronSchedule = "0 1 * * 6"
 # No healthcheckPath: this job must finish and exit.
 restartPolicyType = "NEVER"

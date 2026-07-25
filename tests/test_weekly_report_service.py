@@ -29,8 +29,8 @@ def _snapshot() -> dict:
         "currency": "USD",
         "window": {
             "report_date": REPORT_END,
-            "current_start": "2026-07-17T00:00:00+08:00",
-            "current_end": "2026-07-24T00:00:00+08:00",
+            "current_start": "2026-07-18T00:00:00+08:00",
+            "current_end": "2026-07-25T00:00:00+08:00",
         },
         "periods": {
             "current": {

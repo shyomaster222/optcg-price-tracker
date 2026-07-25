@@ -22,18 +22,18 @@ CHART_FILENAMES = {
 WIDTH = 640
 HEIGHT = 270
 
-BACKGROUND = "#F4F1EA"
+BACKGROUND = "#F2F3F7"
 SURFACE = "#FFFFFF"
-INK = "#17231C"
-MUTED = "#68756D"
-GRID = "#E4E7E2"
-GREEN = "#247454"
-GREEN_LIGHT = "#CFE5D8"
-GOLD = "#D6A33C"
-RED = "#B64B4B"
-BLUE = "#527AA3"
-PURPLE = "#7967A8"
-PALETTE = (GREEN, GOLD, BLUE, PURPLE, "#9B6B4D", "#66958D")
+INK = "#1A1E48"
+MUTED = "#686B80"
+GRID = "#DFE1EA"
+NAVY = "#212650"
+NAVY_LIGHT = "#D9DCE8"
+GOLD = "#EDBC47"
+RED = "#BB2C3E"
+BLUE = "#59618A"
+PURPLE = "#80627B"
+PALETTE = (NAVY, RED, GOLD, BLUE, PURPLE, "#8A7A35")
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
@@ -127,7 +127,7 @@ def render_sales_chart(snapshot: Mapping[str, Any] | None) -> bytes:
     draw.text((24, 20), "Eight-week net collected", font=TITLE_FONT, fill=INK)
     draw.text(
         (24, 49),
-        f"Completed Friday–Thursday windows · {currency}",
+        f"Completed Saturday–Friday windows · {currency}",
         font=SUBTITLE_FONT,
         fill=MUTED,
     )
@@ -158,7 +158,7 @@ def render_sales_chart(snapshot: Mapping[str, Any] | None) -> bytes:
     for index, value in enumerate(values):
         x = left + slot * (index + 0.5)
         y = bottom - (value / scale_max) * (bottom - top)
-        bar_color = GOLD if index == len(values) - 1 else GREEN_LIGHT
+        bar_color = GOLD if index == len(values) - 1 else NAVY_LIGHT
         draw.rounded_rectangle(
             (x - bar_width / 2, y, x + bar_width / 2, bottom),
             radius=3,
@@ -175,9 +175,9 @@ def render_sales_chart(snapshot: Mapping[str, Any] | None) -> bytes:
         )
 
     if len(points) > 1:
-        draw.line(points, fill=GREEN, width=3, joint="curve")
+        draw.line(points, fill=NAVY, width=3, joint="curve")
     for x, y in points:
-        draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill=SURFACE, outline=GREEN, width=2)
+        draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill=SURFACE, outline=NAVY, width=2)
     if values:
         draw.text(
             (points[-1][0], max(points[-1][1] - 10, top + 2)),
@@ -322,7 +322,7 @@ def render_countries_stock_chart(snapshot: Mapping[str, Any] | None) -> bytes:
 
     draw.text((342, 76), "Inventory snapshot", font=LABEL_BOLD_FONT, fill=INK)
     metrics = (
-        ("Sellable", int(_number(stock.get("sellable_units"))), GREEN),
+        ("Sellable", int(_number(stock.get("sellable_units"))), NAVY),
         ("Active SKUs", int(_number(stock.get("active_skus"))), BLUE),
         ("Out of stock", int(_number(stock.get("out_of_stock_skus"))), RED),
         ("Actions", len(action_items), GOLD),

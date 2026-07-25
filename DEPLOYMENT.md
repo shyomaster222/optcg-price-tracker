@@ -71,7 +71,7 @@ python scripts/seed_products.py
 
 ---
 
-## Weekly business report — Friday 09:00 HKT
+## Weekly business report — Saturday 09:00 HKT
 
 Run the weekly report as its own short-lived Railway cron service. Do not run
 it from the web process.
@@ -93,8 +93,8 @@ The checked-in config runs:
 python scripts/run_weekly_business_report.py
 ```
 
-with cron expression `0 1 * * 5`. Railway evaluates cron in UTC, so this is
-Friday 01:00 UTC / Friday 09:00 Hong Kong time. The command is a one-shot
+with cron expression `0 1 * * 6`. Railway evaluates cron in UTC, so this is
+Saturday 01:00 UTC / Saturday 09:00 Hong Kong time. The command is a one-shot
 process and must exit when the report finishes.
 
 ### 2. Set weekly-report variables
@@ -157,7 +157,7 @@ domain.
 Deploy the service and confirm its settings show:
 
 - Start command: `python scripts/run_weekly_business_report.py`
-- Cron schedule: `0 1 * * 5`
+- Cron schedule: `0 1 * * 6`
 - Restart policy: `Never`
 - No public domain
 

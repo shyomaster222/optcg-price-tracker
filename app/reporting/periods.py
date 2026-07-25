@@ -55,7 +55,12 @@ def _parse_report_date(value: date | str | None, now: datetime) -> date:
         return value
 
     today = now.date()
-    return today - timedelta(days=(today.weekday() - 4) % 7)
+    days_since_friday = (today.weekday() - 4) % 7
+    # A Friday is not complete until Saturday 00:00 in the report timezone.
+    # Default runs on Friday therefore use the prior completed Friday.
+    if days_since_friday == 0:
+        days_since_friday = 7
+    return today - timedelta(days=days_since_friday)
 
 
 def build_report_window(
@@ -64,25 +69,33 @@ def build_report_window(
     now: datetime | None = None,
     timezone: str = "Asia/Hong_Kong",
 ) -> ReportWindow:
-    """Build the completed Friday-through-Thursday sales windows.
+    """Build completed Saturday-through-Friday sales windows.
 
-    ``window_end`` is the Friday at 00:00 that closes the report.  When omitted,
-    the most recent Friday in the configured timezone is used.
+    ``window_end`` is the inclusive Friday named in the report. Internally the
+    half-open window closes at Saturday 00:00. When omitted, the most recent
+    fully completed Friday in the configured timezone is used.
     """
 
     tz = ZoneInfo(timezone)
     current_now = now.astimezone(tz) if now else datetime.now(tz)
     report_date = _parse_report_date(window_end, current_now)
-    current_end = datetime.combine(report_date, time.min, tzinfo=tz)
+    current_end = datetime.combine(
+        report_date + timedelta(days=1),
+        time.min,
+        tzinfo=tz,
+    )
     current_start = current_end - timedelta(days=7)
     previous_end = current_start
     previous_start = previous_end - timedelta(days=7)
     four_week_start = current_start - timedelta(days=28)
     trend_start = current_end - timedelta(weeks=8)
 
-    month_start = _month_start(current_end)
+    # Anchor the month to the final included calendar day. This matters when a
+    # Friday is month-end and ``current_end`` falls on the first of next month.
+    final_included_at = current_end - timedelta(microseconds=1)
+    month_start = _month_start(final_included_at)
     month_end = current_end
-    prior_start = _previous_month_start(current_end)
+    prior_start = _previous_month_start(final_included_at)
     elapsed_days = max((month_end.date() - month_start.date()).days, 0)
     next_month_after_prior = month_start
     prior_matched_end = min(

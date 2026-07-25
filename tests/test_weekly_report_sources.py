@@ -649,6 +649,18 @@ def test_gsc_report_uses_latest_final_window_and_builds_movers_and_opportunities
         "start": "2026-07-15",
         "end": "2026-07-21",
     }
+    assert report["previous_weekly_window"] == {
+        "start": "2026-07-08",
+        "end": "2026-07-14",
+    }
+    assert report["query_window"] == {
+        "start": "2026-06-24",
+        "end": "2026-07-21",
+    }
+    assert report["previous_query_window"] == {
+        "start": "2026-05-27",
+        "end": "2026-06-23",
+    }
     assert report["current"]["clicks"] == 100.0
     assert report["comparison"]["clicks"] == {
         "absolute": 20.0,
