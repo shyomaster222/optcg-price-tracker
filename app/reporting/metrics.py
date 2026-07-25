@@ -42,6 +42,7 @@ SOCIAL_HOST_MARKERS = (
 )
 EMAIL_MARKERS = ("email", "newsletter", "klaviyo", "mailchimp", "omnisend", "sms")
 PAID_MARKERS = ("cpc", "ppc", "paid", "paid_search", "paid-social", "paid_social")
+SELF_REFERRAL_HOSTS = ("rarecardsjapan.com",)
 COUNTRY_NAMES = {
     "AU": "Australia",
     "CA": "Canada",
@@ -194,6 +195,13 @@ def _domain(value: str | None) -> str:
     return (parsed.hostname or "").lower().removeprefix("www.")
 
 
+def _is_self_referral(host: str) -> bool:
+    return any(
+        host == domain or host.endswith(f".{domain}")
+        for domain in SELF_REFERRAL_HOSTS
+    )
+
+
 def _first_visit(order: dict) -> dict | None:
     journey = order.get("customerJourneySummary") or {}
     if not journey.get("ready", True):
@@ -265,10 +273,17 @@ def acquisition_source(order: dict) -> str:
         return "Organic Search"
     if any(marker in host for marker in SOCIAL_HOST_MARKERS) or source_type == "social":
         return "Organic Social"
-    if "affiliate" in joined:
-        return "Affiliate / Referral"
+    if any(
+        "affiliate" in value
+        for value in (source, medium, campaign, source_type)
+    ):
+        return "Affiliate"
+    if _is_self_referral(host):
+        return "Direct"
     if host:
-        return "Affiliate / Referral"
+        return "Other website referrals"
+    if medium == "referral" or source_type == "referral":
+        return "Other website referrals"
     if source in {"direct", "", "none"} and not signals["referrer"]:
         return "Direct"
     return "Unknown"

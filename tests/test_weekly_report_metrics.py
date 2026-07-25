@@ -298,6 +298,96 @@ def test_first_touch_blog_order_contributes_to_acquisition_and_landing_metrics()
     assert result["acquisition"]["order_coverage"] == 1.0
 
 
+@pytest.mark.parametrize(
+    ("first_visit", "expected"),
+    [
+        (
+            {
+                "landingPage": "https://rarecardsjapan.com/products/op14",
+                "referrerUrl": "https://partner.example/cards",
+                "source": "partner",
+                "sourceType": "referral",
+                "utmParameters": {"source": "partner", "medium": "affiliate"},
+            },
+            "Affiliate",
+        ),
+        (
+            {
+                "landingPage": "https://rarecardsjapan.com/products/op14",
+                "referrerUrl": "",
+                "source": "affiliate_network",
+            },
+            "Affiliate",
+        ),
+        (
+            {
+                "landingPage": "https://rarecardsjapan.com/products/op14",
+                "referrerUrl": "",
+                "utmParameters": {"campaign": "summer_affiliate"},
+            },
+            "Affiliate",
+        ),
+        (
+            {
+                "landingPage": "https://rarecardsjapan.com/products/op14",
+                "referrerUrl": "",
+                "sourceType": "affiliate",
+            },
+            "Affiliate",
+        ),
+        (
+            {
+                "landingPage": "https://rarecardsjapan.com/products/op14",
+                "referrerUrl": "https://shopify.com/",
+                "source": "https://shopify.com/",
+            },
+            "Other website referrals",
+        ),
+        (
+            {
+                "landingPage": "https://rarecardsjapan.com/products/op14",
+                "referrerUrl": "https://notrarecardsjapan.com/reviews/op14",
+            },
+            "Other website referrals",
+        ),
+        (
+            {
+                "landingPage": "https://rarecardsjapan.com/products/op14",
+                "referrerUrl": "https://rarecardsjapan.com/collections/one-piece",
+                "source": "direct",
+            },
+            "Direct",
+        ),
+        (
+            {
+                "landingPage": "https://rarecardsjapan.com/products/op14",
+                "referrerUrl": "https://shop.rarecardsjapan.com/",
+                "source": "direct",
+            },
+            "Direct",
+        ),
+        (
+            {
+                "landingPage": "https://rarecardsjapan.com/products/op14",
+                "referrerUrl": "https://www.rarecardsjapan.com/blogs/news/op14",
+                "source": "direct",
+            },
+            "Direct",
+        ),
+    ],
+)
+def test_acquisition_source_separates_affiliates_and_referrals(
+    first_visit,
+    expected,
+):
+    order = _order(
+        "2026-07-15T12:00:00+08:00",
+        journey={"ready": True, "firstVisit": first_visit},
+    )
+
+    assert acquisition_source(order) == expected
+
+
 def test_wider_metrics_use_90_days_and_sales_headlines_use_ytd_and_months():
     first_visit = {
         "landingPage": "https://rarecardsjapan.com/blogs/news/guide",
