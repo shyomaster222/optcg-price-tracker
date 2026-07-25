@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>RCJ weekly business pulse</title>
+  <style>
+    @media only screen and (max-width: 620px) {
+      .email-shell { width: 100% !important; }
+      .pad { padding-left: 18px !important; padding-right: 18px !important; }
+      .metric-cell { display: inline-block !important; width: 50% !important; box-sizing: border-box !important; }
+      .stack-cell { display: block !important; width: 100% !important; box-sizing: border-box !important; }
+      .mobile-hide { display: none !important; }
+      .chart { width: 100% !important; height: auto !important; }
+      .small-text { font-size: 12px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background:#f4f1ea;color:#17231c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+    Verified weekly sales, acquisition, market and inventory signals for Rare Cards Japan.
+  </div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;background:#f4f1ea;">
+    <tr>
+      <td align="center" style="padding:22px 10px 36px;">
+        <table role="presentation" class="email-shell" width="680" cellspacing="0" cellpadding="0" border="0" style="width:680px;max-width:680px;border-collapse:separate;background:#ffffff;border:1px solid #e2e5df;border-radius:18px;overflow:hidden;">
+          <tr>
+            <td class="pad" style="padding:30px 34px 26px;background:#183f31;color:#ffffff;">
+              <div style="font-size:12px;line-height:1.4;letter-spacing:1.5px;text-transform:uppercase;color:#cfe5d8;">Rare Cards Japan</div>
+              <h1 style="margin:7px 0 5px;font-size:28px;line-height:1.18;font-weight:750;color:#ffffff;">Weekly business pulse</h1>
+              <div style="font-size:14px;line-height:1.5;color:#dce9e2;">
+                Week ending {{ report_date|display_date }}
+                {% if window.get('timezone') %} · {{ window.get('timezone') }}{% endif %}
+              </div>
+            </td>
+          </tr>
+
+          {% if is_partial %}
+          <tr>
+            <td class="pad" style="padding:18px 34px 0;">
+              <div style="padding:13px 15px;border:1px solid #e5c674;border-radius:10px;background:#fff8df;color:#594514;font-size:13px;line-height:1.55;">
+                <strong>Partial report:</strong>
+                data was unavailable or incomplete for
+                {% for source in partial_sources %}{{ source }}{% if not loop.last %}, {% endif %}{% endfor %}.
+                Verified sections below are still safe to use.
+              </div>
+            </td>
+          </tr>
+          {% endif %}
+
+          <tr>
+            <td class="pad" style="padding:25px 34px 9px;">
+              <div style="font-size:11px;line-height:1.4;letter-spacing:1.2px;text-transform:uppercase;color:#247454;">
+                {% if narrative.generated_by_ai %}
+                  AI-assisted commentary{% if narrative.model %} · {{ narrative.model }}{% endif %}
+                {% else %}
+                  Deterministic commentary from verified totals
+                {% endif %}
+              </div>
+              <h2 style="margin:7px 0 9px;font-size:22px;line-height:1.25;color:#17231c;">{{ narrative.headline }}</h2>
+              <p style="margin:0;font-size:15px;line-height:1.65;color:#36453c;">{{ narrative.executive_summary }}</p>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="pad" style="padding:14px 34px 5px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;">
+                <tr>
+                  <td class="metric-cell" width="25%" valign="top" style="width:25%;padding:5px;">
+                    <div style="min-height:78px;padding:13px 12px;border-radius:10px;background:#f4f7f4;">
+                      <div style="font-size:11px;line-height:1.3;color:#68756d;">Net collected</div>
+                      <div style="margin-top:5px;font-size:18px;line-height:1.2;font-weight:750;color:#17231c;">{{ current.get('net_sales')|money(currency) }}</div>
+                      <div style="margin-top:5px;font-size:11px;line-height:1.3;color:{% if sales_change is not none and sales_change < 0 %}#b64b4b{% else %}#247454{% endif %};">{{ sales_change|percent(true) }} WoW</div>
+                    </div>
+                  </td>
+                  <td class="metric-cell" width="25%" valign="top" style="width:25%;padding:5px;">
+                    <div style="min-height:78px;padding:13px 12px;border-radius:10px;background:#f4f7f4;">
+                      <div style="font-size:11px;line-height:1.3;color:#68756d;">Orders</div>
+                      <div style="margin-top:5px;font-size:18px;line-height:1.2;font-weight:750;color:#17231c;">{{ current.get('orders')|integer }}</div>
+                      <div style="margin-top:5px;font-size:11px;line-height:1.3;color:{% if orders_change is not none and orders_change < 0 %}#b64b4b{% else %}#247454{% endif %};">{{ orders_change|percent(true) }} WoW</div>
+                    </div>
+                  </td>
+                  <td class="metric-cell" width="25%" valign="top" style="width:25%;padding:5px;">
+                    <div style="min-height:78px;padding:13px 12px;border-radius:10px;background:#f4f7f4;">
+                      <div style="font-size:11px;line-height:1.3;color:#68756d;">Average order</div>
+                      <div style="margin-top:5px;font-size:18px;line-height:1.2;font-weight:750;color:#17231c;">{{ current.get('aov')|money(currency) }}</div>
+                      <div style="margin-top:5px;font-size:11px;line-height:1.3;color:{% if aov_change is not none and aov_change < 0 %}#b64b4b{% else %}#247454{% endif %};">{{ aov_change|percent(true) }} WoW</div>
+                    </div>
+                  </td>
+                  <td class="metric-cell" width="25%" valign="top" style="width:25%;padding:5px;">
+                    <div style="min-height:78px;padding:13px 12px;border-radius:10px;background:#f4f7f4;">
+                      <div style="font-size:11px;line-height:1.3;color:#68756d;">Units</div>
+                      <div style="margin-top:5px;font-size:18px;line-height:1.2;font-weight:750;color:#17231c;">{{ current.get('units')|integer }}</div>
+                      <div style="margin-top:5px;font-size:11px;line-height:1.3;color:{% if units_change is not none and units_change < 0 %}#b64b4b{% else %}#247454{% endif %};">{{ units_change|percent(true) }} WoW</div>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="pad" style="padding:18px 34px 7px;">
+              <div style="margin:0 0 10px;padding:10px 13px;border-radius:8px;background:#f8f6f1;font-size:11px;line-height:1.5;color:#68756d;">
+                Lifetime-to-date refunds attached to orders processed in this window:
+                <strong style="color:#36453c;">{{ current.get('refunds')|money(currency) }}</strong>
+                across {{ current.get('refund_orders')|integer }} refunded orders.
+                This is not a count or value of refunds issued during the week.
+              </div>
+              <img class="chart" src="cid:{{ sales_chart_cid }}" width="612" alt="Eight-week net collected revenue chart" style="display:block;width:100%;max-width:612px;height:auto;border:0;border-radius:12px;">
+            </td>
+          </tr>
+
+          <tr>
+            <td class="pad" style="padding:19px 34px 2px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;">
+                <tr>
+                  <td class="stack-cell" width="50%" valign="top" style="width:50%;padding:0 9px 12px 0;">
+                    <div style="height:100%;padding:17px;border:1px solid #e4e7e2;border-radius:12px;background:#ffffff;">
+                      <h3 style="margin:0 0 11px;font-size:15px;line-height:1.3;color:#17231c;">What changed</h3>
+                      {% for item in narrative.highlights %}
+                      <div style="margin:0 0 9px;padding-left:14px;border-left:3px solid #cfe5d8;font-size:13px;line-height:1.5;color:#445249;">{{ item }}</div>
+                      {% endfor %}
+                    </div>
+                  </td>
+                  <td class="stack-cell" width="50%" valign="top" style="width:50%;padding:0 0 12px 9px;">
+                    <div style="height:100%;padding:17px;border:1px solid #e4e7e2;border-radius:12px;background:#ffffff;">
+                      <h3 style="margin:0 0 11px;font-size:15px;line-height:1.3;color:#17231c;">Next actions</h3>
+                      {% for item in narrative.actions %}
+                      <div style="margin:0 0 9px;padding-left:14px;border-left:3px solid #d6a33c;font-size:13px;line-height:1.5;color:#445249;">{{ item }}</div>
+                      {% endfor %}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="pad" style="padding:22px 34px 7px;">
+              <h2 style="margin:0 0 4px;font-size:19px;line-height:1.3;color:#17231c;">Acquisition & channels</h2>
+              <p style="margin:0 0 13px;font-size:12px;line-height:1.5;color:#68756d;">
+                Shopify first-touch evidence for eligible online-store orders.
+                Coverage: {{ acquisition.get('order_coverage')|percent }} of orders and {{ acquisition.get('revenue_coverage')|percent }} of revenue;
+                {{ acquisition.get('confidence', 'unknown') }} confidence.
+              </p>
+              <img class="chart" src="cid:{{ acquisition_chart_cid }}" width="612" alt="Acquisition mix chart" style="display:block;width:100%;max-width:612px;height:auto;border:0;border-radius:12px;">
+            </td>
+          </tr>
+
+          {% if acquisition_items or channels %}
+          <tr>
+            <td class="pad" style="padding:9px 34px 8px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #e4e7e2;border-radius:10px;overflow:hidden;">
+                <tr style="background:#f4f7f4;">
+                  <th align="left" style="padding:10px 12px;font-size:11px;line-height:1.3;color:#68756d;">Source / channel</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;line-height:1.3;color:#68756d;">Orders</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;line-height:1.3;color:#68756d;">Net collected</th>
+                  <th class="mobile-hide" align="right" style="padding:10px 12px;font-size:11px;line-height:1.3;color:#68756d;">Share</th>
+                </tr>
+                {% for row in acquisition_items[:5] %}
+                <tr>
+                  <td style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">{{ row.get('label', 'Unknown') }}</td>
+                  <td align="right" style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">{{ row.get('orders')|integer }}</td>
+                  <td align="right" style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">{{ row.get('net_sales')|money(currency) }}</td>
+                  <td class="mobile-hide" align="right" style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#68756d;">{{ row.get('share')|percent }}</td>
+                </tr>
+                {% endfor %}
+                {% for row in channels[:5] %}
+                <tr>
+                  <td style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">Channel · {{ row.get('label', 'Unknown') }}</td>
+                  <td align="right" style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">{{ row.get('orders')|integer }}</td>
+                  <td align="right" style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">{{ row.get('net_sales')|money(currency) }}</td>
+                  <td class="mobile-hide" align="right" style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#68756d;">{{ row.get('share')|percent }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+          {% endif %}
+
+          <tr>
+            <td class="pad" style="padding:20px 34px 8px;">
+              <h3 style="margin:0 0 4px;font-size:16px;line-height:1.3;color:#17231c;">Landing-page & content assists</h3>
+              <p style="margin:0 0 12px;font-size:12px;line-height:1.5;color:#68756d;">First-touch entry pages are assists, not proof that the page caused conversion.</p>
+              <div style="margin:0 0 12px;padding:12px 14px;border-left:4px solid #247454;border-radius:8px;background:#f4f7f4;font-size:13px;line-height:1.5;color:#26352c;">
+                <strong>Blog assists:</strong>
+                {{ blog_assist.get('orders')|integer }} orders ·
+                {{ blog_assist.get('net_sales')|money(currency) }} net collected ·
+                {{ blog_assist.get('share')|percent }} share
+              </div>
+              {% if landing_types %}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #e4e7e2;border-radius:10px;overflow:hidden;">
+                <tr style="background:#f4f7f4;">
+                  <th align="left" style="padding:9px 11px;font-size:11px;color:#68756d;">Entry-page type</th>
+                  <th align="right" style="padding:9px 11px;font-size:11px;color:#68756d;">Orders</th>
+                  <th align="right" style="padding:9px 11px;font-size:11px;color:#68756d;">Net collected</th>
+                  <th class="mobile-hide" align="right" style="padding:9px 11px;font-size:11px;color:#68756d;">Share</th>
+                </tr>
+                {% for row in landing_types[:8] %}
+                <tr>
+                  <td style="padding:8px 11px;border-top:1px solid #edf0ec;font-size:12px;color:#26352c;">{{ row.get('label', 'Unknown') }}</td>
+                  <td align="right" style="padding:8px 11px;border-top:1px solid #edf0ec;font-size:12px;color:#26352c;">{{ row.get('orders')|integer }}</td>
+                  <td align="right" style="padding:8px 11px;border-top:1px solid #edf0ec;font-size:12px;color:#26352c;">{{ row.get('net_sales')|money(currency) }}</td>
+                  <td class="mobile-hide" align="right" style="padding:8px 11px;border-top:1px solid #edf0ec;font-size:12px;color:#68756d;">{{ row.get('share')|percent }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+              {% endif %}
+              {% if landing_top_pages %}
+              <div style="margin:12px 0 6px;font-size:11px;line-height:1.4;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#68756d;">Top entry paths</div>
+              {% for row in landing_top_pages[:6] %}
+              <div style="padding:7px 0;border-top:1px solid #edf0ec;font-size:12px;line-height:1.45;color:#36453c;">
+                <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#17231c;">{{ row.get('label') }}</span>
+                · {{ row.get('orders')|integer }} orders
+                · {{ row.get('net_sales')|money(currency) }}
+              </div>
+              {% endfor %}
+              {% endif %}
+            </td>
+          </tr>
+
+          <tr>
+            <td class="pad" style="padding:22px 34px 7px;">
+              <h2 style="margin:0 0 4px;font-size:19px;line-height:1.3;color:#17231c;">Markets & inventory</h2>
+              <p style="margin:0 0 13px;font-size:12px;line-height:1.5;color:#68756d;">Destination mix uses net collected revenue on current-window orders. Stock actions use recent unit velocity and active catalog inventory.</p>
+              <img class="chart" src="cid:{{ countries_stock_chart_cid }}" width="612" alt="Leading countries and inventory health chart" style="display:block;width:100%;max-width:612px;height:auto;border:0;border-radius:12px;">
+            </td>
+          </tr>
+
+          {% if stock_actions %}
+          <tr>
+            <td class="pad" style="padding:9px 34px 8px;">
+              <h3 style="margin:0 0 10px;font-size:15px;line-height:1.3;color:#17231c;">Priority inventory actions</h3>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #e4e7e2;border-radius:10px;overflow:hidden;">
+                <tr style="background:#f4f7f4;">
+                  <th align="left" style="padding:10px 12px;font-size:11px;color:#68756d;">Product</th>
+                  <th align="left" style="padding:10px 12px;font-size:11px;color:#68756d;">Action</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;color:#68756d;">Stock</th>
+                  <th class="mobile-hide" align="right" style="padding:10px 12px;font-size:11px;color:#68756d;">Weeks cover</th>
+                </tr>
+                {% for row in stock_actions[:8] %}
+                <tr>
+                  <td style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">
+                    {{ row.get('title', 'Unknown') }}{% if row.get('variant_title') %} · {{ row.get('variant_title') }}{% endif %}
+                  </td>
+                  <td style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">{{ row.get('action', 'Review') }}</td>
+                  <td align="right" style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">{{ row.get('inventory')|integer }}</td>
+                  <td class="mobile-hide" align="right" style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#68756d;">{{ row.get('weeks_cover')|decimal(1) }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+          {% endif %}
+
+          {% if products %}
+          <tr>
+            <td class="pad" style="padding:22px 34px 8px;">
+              <h2 style="margin:0 0 10px;font-size:19px;line-height:1.3;color:#17231c;">Top products</h2>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #e4e7e2;border-radius:10px;overflow:hidden;">
+                <tr style="background:#f4f7f4;">
+                  <th align="left" style="padding:10px 12px;font-size:11px;color:#68756d;">Product</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;color:#68756d;">Units</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;color:#68756d;">Line sales</th>
+                  <th class="mobile-hide" align="right" style="padding:10px 12px;font-size:11px;color:#68756d;">WoW</th>
+                </tr>
+                {% for row in products[:8] %}
+                <tr>
+                  <td style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">
+                    {{ row.get('title', 'Unknown') }}{% if row.get('variant_title') %} · {{ row.get('variant_title') }}{% endif %}
+                  </td>
+                  <td align="right" style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">{{ row.get('units')|integer }}</td>
+                  <td align="right" style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">{{ row.get('line_sales')|money(currency) }}</td>
+                  <td class="mobile-hide" align="right" style="padding:9px 12px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#68756d;">{{ row.get('sales_change')|percent(true) }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+              <p style="margin:7px 0 0;font-size:11px;line-height:1.45;color:#7b857f;">Product line sales are discounted merchandise values and do not reconcile exactly to net collected revenue.</p>
+            </td>
+          </tr>
+          {% endif %}
+
+          {% set mtd = monthly.get('month_to_date', {}) %}
+          {% set last_month = monthly.get('last_full_month', {}) %}
+          <tr>
+            <td class="pad" style="padding:22px 34px 8px;">
+              <h2 style="margin:0 0 4px;font-size:19px;line-height:1.3;color:#17231c;">Monthly sales</h2>
+              <p style="margin:0 0 10px;font-size:12px;line-height:1.5;color:#68756d;">Current month to date, compared with the matched prior-month window and the last complete month.</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;background:#f4f7f4;border-radius:10px;">
+                <tr>
+                  <td class="metric-cell" width="25%" style="width:25%;padding:14px 12px;">
+                    <div style="font-size:11px;color:#68756d;">MTD net collected</div>
+                    <div style="margin-top:4px;font-size:16px;font-weight:700;color:#17231c;">{{ mtd.get('net_sales')|money(currency) }}</div>
+                  </td>
+                  <td class="metric-cell" width="25%" style="width:25%;padding:14px 12px;">
+                    <div style="font-size:11px;color:#68756d;">MTD orders</div>
+                    <div style="margin-top:4px;font-size:16px;font-weight:700;color:#17231c;">{{ mtd.get('orders')|integer }}</div>
+                  </td>
+                  <td class="metric-cell" width="25%" style="width:25%;padding:14px 12px;">
+                    <div style="font-size:11px;color:#68756d;">MTD vs matched</div>
+                    <div style="margin-top:4px;font-size:16px;font-weight:700;color:#17231c;">{{ mtd.get('comparison', {}).get('net_sales', {}).get('percent')|percent(true) }}</div>
+                  </td>
+                  <td class="metric-cell" width="25%" style="width:25%;padding:14px 12px;">
+                    <div style="font-size:11px;color:#68756d;">Last full month</div>
+                    <div style="margin-top:4px;font-size:16px;font-weight:700;color:#17231c;">{{ last_month.get('net_sales')|money(currency) }}</div>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:7px 0 0;font-size:11px;line-height:1.45;color:#7b857f;">
+                Last full month: {{ last_month.get('orders')|integer }} orders ·
+                {{ last_month.get('aov')|money(currency) }} average order ·
+                {{ last_month.get('units')|integer }} units.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="pad" style="padding:22px 34px 8px;">
+              <h2 style="margin:0 0 10px;font-size:19px;line-height:1.3;color:#17231c;">Organic search</h2>
+              {% if gsc_available %}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;background:#f4f7f4;border-radius:10px;">
+                <tr>
+                  <td class="metric-cell" width="25%" style="width:25%;padding:13px;">
+                    <div style="font-size:11px;color:#68756d;">Clicks</div>
+                    <div style="margin-top:4px;font-size:17px;font-weight:700;color:#17231c;">{{ gsc.get('current', {}).get('clicks')|integer }}</div>
+                  </td>
+                  <td class="metric-cell" width="25%" style="width:25%;padding:13px;">
+                    <div style="font-size:11px;color:#68756d;">Impressions</div>
+                    <div style="margin-top:4px;font-size:17px;font-weight:700;color:#17231c;">{{ gsc.get('current', {}).get('impressions')|integer }}</div>
+                  </td>
+                  <td class="metric-cell" width="25%" style="width:25%;padding:13px;">
+                    <div style="font-size:11px;color:#68756d;">CTR</div>
+                    <div style="margin-top:4px;font-size:17px;font-weight:700;color:#17231c;">{{ gsc.get('current', {}).get('ctr')|percent }}</div>
+                  </td>
+                  <td class="metric-cell" width="25%" style="width:25%;padding:13px;">
+                    <div style="font-size:11px;color:#68756d;">Position</div>
+                    <div style="margin-top:4px;font-size:17px;font-weight:700;color:#17231c;">{{ gsc.get('current', {}).get('position')|decimal(1) }}</div>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:7px 0 0;font-size:11px;line-height:1.45;color:#7b857f;">
+                Finalized through {{ gsc.get('as_of')|display_date }}{% if gsc.get('query_rows_are_partial') %}; query-level rows are partial and may omit anonymized searches{% endif %}.
+              </p>
+
+              {% if gsc_top_queries %}
+              <h3 style="margin:19px 0 8px;font-size:15px;line-height:1.3;color:#17231c;">Top Google keywords</h3>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #e4e7e2;border-radius:10px;overflow:hidden;">
+                <tr style="background:#f4f7f4;">
+                  <th align="left" style="padding:9px 10px;font-size:11px;color:#68756d;">Query</th>
+                  <th align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">Clicks</th>
+                  <th align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">Impr.</th>
+                  <th class="mobile-hide" align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">CTR</th>
+                  <th class="mobile-hide" align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">Position</th>
+                </tr>
+                {% for row in gsc_top_queries %}
+                <tr>
+                  <td style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">{{ row.get('query') }}</td>
+                  <td align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;color:#26352c;">{{ row.get('clicks')|integer }}</td>
+                  <td align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;color:#26352c;">{{ row.get('impressions')|integer }}</td>
+                  <td class="mobile-hide" align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;color:#68756d;">{{ row.get('ctr')|percent }}</td>
+                  <td class="mobile-hide" align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;color:#68756d;">{{ row.get('position')|decimal(1) }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+              {% endif %}
+
+              {% if gsc_query_movers %}
+              <h3 style="margin:19px 0 8px;font-size:15px;line-height:1.3;color:#17231c;">Keyword movers</h3>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #e4e7e2;border-radius:10px;overflow:hidden;">
+                <tr style="background:#f4f7f4;">
+                  <th align="left" style="padding:9px 10px;font-size:11px;color:#68756d;">Query / signal</th>
+                  <th align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">Clicks</th>
+                  <th align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">Impr.</th>
+                  <th class="mobile-hide" align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">CTR</th>
+                  <th class="mobile-hide" align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">Position</th>
+                </tr>
+                {% for row in gsc_query_movers %}
+                <tr>
+                  <td style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.35;color:#26352c;">
+                    {{ row.get('query') }}
+                    <div style="margin-top:2px;font-size:10px;color:#68756d;">{{ row.get('type') }}</div>
+                  </td>
+                  <td align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.25;color:#26352c;">
+                    {{ row.get('clicks')|integer }}
+                    <div style="font-size:10px;color:#68756d;">{{ row.get('click_delta')|signed_integer }} Δ</div>
+                  </td>
+                  <td align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.25;color:#26352c;">
+                    {{ row.get('impressions')|integer }}
+                    <div style="font-size:10px;color:#68756d;">{{ row.get('impression_delta')|signed_integer }} Δ</div>
+                  </td>
+                  <td class="mobile-hide" align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.25;color:#26352c;">
+                    {{ row.get('ctr')|percent }}
+                    <div style="font-size:10px;color:#68756d;">{{ row.get('ctr_delta_pp')|signed_decimal(1) }} pp</div>
+                  </td>
+                  <td class="mobile-hide" align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.25;color:#26352c;">
+                    {{ row.get('position')|decimal(1) }}
+                    <div style="font-size:10px;color:#68756d;">{{ row.get('position_improvement')|signed_decimal(1) }} improvement</div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </table>
+              {% endif %}
+
+              {% if gsc_opportunities %}
+              <h3 style="margin:19px 0 8px;font-size:15px;line-height:1.3;color:#17231c;">Keyword opportunities</h3>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #e4e7e2;border-radius:10px;overflow:hidden;">
+                <tr style="background:#f4f7f4;">
+                  <th align="left" style="padding:9px 10px;font-size:11px;color:#68756d;">Query</th>
+                  <th align="left" style="padding:9px 10px;font-size:11px;color:#68756d;">Type</th>
+                  <th align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">Clicks</th>
+                  <th align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">Impr.</th>
+                  <th class="mobile-hide" align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">CTR</th>
+                  <th class="mobile-hide" align="right" style="padding:9px 10px;font-size:11px;color:#68756d;">Position</th>
+                </tr>
+                {% for row in gsc_opportunities %}
+                <tr>
+                  <td style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;line-height:1.4;color:#26352c;">{{ row.get('query') }}</td>
+                  <td style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:11px;line-height:1.4;color:#68756d;">{{ row.get('type') }}</td>
+                  <td align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;color:#26352c;">{{ row.get('clicks')|integer }}</td>
+                  <td align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;color:#26352c;">{{ row.get('impressions')|integer }}</td>
+                  <td class="mobile-hide" align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;color:#68756d;">{{ row.get('ctr')|percent }}</td>
+                  <td class="mobile-hide" align="right" style="padding:8px 10px;border-top:1px solid #edf0ec;font-size:12px;color:#68756d;">{{ row.get('position')|decimal(1) }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+              {% endif %}
+              {% else %}
+              <div style="padding:14px 16px;border-radius:10px;background:#f4f7f4;font-size:13px;line-height:1.5;color:#68756d;">Google Search Console data was not available for this edition.</div>
+              {% endif %}
+            </td>
+          </tr>
+
+          <tr>
+            <td class="pad" style="padding:20px 34px 27px;">
+              <div style="padding:15px 17px;border-radius:10px;background:#f8f6f1;">
+                <h3 style="margin:0 0 8px;font-size:13px;line-height:1.3;color:#17231c;">Read with context</h3>
+                {% for item in report_caveats %}
+                <div style="margin:0 0 5px;font-size:11px;line-height:1.5;color:#68756d;">• {{ item }}</div>
+                {% endfor %}
+                {% for item in data_quality.get('notes', [])[:3] %}
+                <div style="margin:0 0 5px;font-size:11px;line-height:1.5;color:#68756d;">• {{ item }}</div>
+                {% endfor %}
+                {% if not narrative.generated_by_ai %}
+                <div style="margin:8px 0 0;font-size:11px;line-height:1.5;color:#68756d;">AI commentary was unavailable or disabled; the narrative above was generated deterministically from verified aggregate metrics.</div>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="pad" style="padding:18px 34px;background:#edf2ee;border-top:1px solid #e0e6e1;font-size:11px;line-height:1.55;color:#68756d;">
+              Internal business pulse · Windows use inclusive starts and exclusive ends · No customer-level data is included.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

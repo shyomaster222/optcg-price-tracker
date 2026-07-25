@@ -39,6 +39,9 @@ htmlcov/
 Thumbs.db
 .worktrees/
 
+# Local code-graph analysis output
+graphify-out/
+
 # Price-sync drafts (the verified price_map.json IS committed; drafts are not)
 price_map.generated.json
 price_map.report.json

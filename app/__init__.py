@@ -24,7 +24,10 @@ from app.extensions import db, migrate
 logger = logging.getLogger(__name__)
 
 
-def create_app(config_name: str = "default") -> Flask:
+def create_app(
+    config_name: str = "default",
+    start_scheduler: bool | None = None,
+) -> Flask:
     app = Flask(__name__)
 
     # ------------------------------------------------------------------
@@ -37,6 +40,8 @@ def create_app(config_name: str = "default") -> Flask:
     # Extensions
     # ------------------------------------------------------------------
     db.init_app(app)
+    # Register every model before Flask-Migrate or create_all inspects metadata.
+    from app import models as _models  # noqa: F401
     migrate.init_app(app, db)
 
     # ------------------------------------------------------------------
@@ -57,7 +62,12 @@ def create_app(config_name: str = "default") -> Flask:
     # ------------------------------------------------------------------
     # Scheduler  (APScheduler)
     # ------------------------------------------------------------------
-    _start_scheduler(app)
+    if start_scheduler is None:
+        start_scheduler = bool(
+            app.config.get("ENABLE_IN_PROCESS_SCHEDULER", True)
+        )
+    if start_scheduler:
+        _start_scheduler(app)
 
     return app
 

@@ -209,7 +209,7 @@ def get_fuji(source):
     """Resolve the Fuji URL map from the requested source, with auto fallback."""
     if source in ("db", "auto"):
         from app import create_app
-        app = create_app()
+        app = create_app(start_scheduler=False)
         with app.app_context():
             by_key = fuji_from_db()
         if by_key:

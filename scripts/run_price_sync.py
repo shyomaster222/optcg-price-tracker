@@ -32,7 +32,7 @@ def main():
     parser.add_argument("--email", action="store_true", help="Send the summary/review email after the run")
     args = parser.parse_args()
 
-    app = create_app()
+    app = create_app(start_scheduler=False)
     with app.app_context():
         db.create_all()  # creates price_sync_log if missing; no-op otherwise
 

@@ -105,7 +105,7 @@ def seed_products():
 
 def main():
     """Main seed function"""
-    app = create_app()
+    app = create_app(start_scheduler=False)
 
     with app.app_context():
         print("=" * 50)

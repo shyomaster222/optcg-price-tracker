@@ -71,7 +71,7 @@ def main():
 
     args = parser.parse_args()
 
-    app = create_app()
+    app = create_app(start_scheduler=False)
 
     if args.list:
         list_retailers(app)

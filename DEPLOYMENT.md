@@ -71,6 +71,119 @@ python scripts/seed_products.py
 
 ---
 
+## Weekly business report — Friday 09:00 HKT
+
+Run the weekly report as its own short-lived Railway cron service. Do not run
+it from the web process.
+
+### 1. Create the weekly service
+
+1. In the same Railway project, choose **+ New** → **GitHub Repo** and select
+   this repository again.
+2. Name the service `weekly-report`.
+3. In **Settings** → **Config as Code**, set **Config file path** to:
+   `/railway.weekly-report.toml`
+4. Do not add a public domain or a health check.
+5. Give the service the same PostgreSQL `DATABASE_URL` as the web service,
+   preferably with a Railway reference/shared variable.
+
+The checked-in config runs:
+
+```text
+python scripts/run_weekly_business_report.py
+```
+
+with cron expression `0 1 * * 5`. Railway evaluates cron in UTC, so this is
+Friday 01:00 UTC / Friday 09:00 Hong Kong time. The command is a one-shot
+process and must exit when the report finishes.
+
+### 2. Set weekly-report variables
+
+Add these to the `weekly-report` service:
+
+```dotenv
+ENABLE_IN_PROCESS_SCHEDULER=false
+WEEKLY_REPORT_ENABLED=true
+WEEKLY_REPORT_EMAIL_TO=admin@rarecardsjapan.com
+WEEKLY_REPORT_EMAIL_FROM=admin@rarecardsjapan.com
+WEEKLY_REPORT_TIMEZONE=Asia/Hong_Kong
+WEEKLY_REPORT_REVISION=1
+WEEKLY_REPORT_LEASE_SECONDS=3600
+WEEKLY_REPORT_SOURCE_TIMEOUT_SECONDS=45
+WEEKLY_REPORT_B2B_TAGS=B2B,Wholesale
+
+SHOPIFY_REPORT_SHOP=48wpjk-rh.myshopify.com
+SHOPIFY_REPORT_API_VERSION=2026-07
+SHOPIFY_REPORT_TOKEN=shpat_read_only_xxxxxxxxxxxx
+
+GSC_CLIENT_ID=xxxxxxxxxxxx.apps.googleusercontent.com
+GSC_CLIENT_SECRET=GOCSPX_xxxxxxxxxxxxxxxxxxxx
+GSC_REFRESH_TOKEN=1//xxxxxxxxxxxxxxxxxxxx
+GSC_PROPERTY=sc-domain:rarecardsjapan.com
+
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxx
+OPENAI_WEEKLY_REPORT_MODEL=gpt-5.6-terra
+OPENAI_WEEKLY_REPORT_TIMEOUT_SECONDS=30
+
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx
+COMPANY_EMAIL=admin@rarecardsjapan.com
+```
+
+`WEEKLY_REPORT_EMAIL_TO` and `WEEKLY_REPORT_EMAIL_FROM` each fall back to
+`COMPANY_EMAIL`, but setting them explicitly on the cron service makes the
+delivery target auditable.
+
+Create `SHOPIFY_REPORT_TOKEN` as a dedicated read-only Shopify credential with
+`read_orders`, `read_all_orders`, and `read_products`. The reporting shop,
+version, and token are intentionally separate from the write-capable
+`SHOPIFY_SHOP`, `SHOPIFY_API_VERSION`, and `SHOPIFY_ADMIN_TOKEN` settings used
+by price sync. Never copy `SHOPIFY_ADMIN_TOKEN` into `SHOPIFY_REPORT_TOKEN`.
+
+The Google OAuth user represented by `GSC_REFRESH_TOKEN` must have access to
+the property named by `GSC_PROPERTY`. The Resend sender must be on a verified
+domain.
+
+### 3. Deploy and verify
+
+Deploy the service and confirm its settings show:
+
+- Start command: `python scripts/run_weekly_business_report.py`
+- Cron schedule: `0 1 * * 5`
+- Restart policy: `Never`
+- No public domain
+
+Before enabling delivery, run a source-backed preview from Railway's **Run
+Command**:
+
+```bash
+python scripts/run_weekly_business_report.py \
+  --dry-run \
+  --output /tmp/rcj-weekly-preview
+```
+
+The dry run fetches Shopify and Search Console and renders the complete HTML,
+plain-text, and chart files, but does not call OpenAI, write report-run state,
+or send email. After reviewing the preview, set
+`WEEKLY_REPORT_ENABLED=true` and run:
+
+```bash
+python scripts/run_weekly_business_report.py
+```
+
+The database record for each Friday window and revision makes retries
+resumable and delivery idempotent. Exit code `0` means the run was safely
+handled. Exit code `1` is a generation or delivery failure. Exit code `2`
+means delivery is disabled or its state is unknown and needs operator review.
+An unknown delivery state is never resent automatically; reconcile the
+provider message ID in Resend before using `--force-resend --window-end
+YYYY-MM-DD`.
+
+Pre-delivery failures attempt a concise failure notice through Resend. Also
+configure Railway deployment/cron failure notifications so database failures
+and email-provider outages are visible even when Resend itself is unavailable.
+
+---
+
 ## Automatic price updates every 24 hours
 
 ### Option A: Railway Cron (recommended)

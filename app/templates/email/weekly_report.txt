@@ -1,0 +1,150 @@
+RARE CARDS JAPAN — WEEKLY BUSINESS PULSE
+Week ending {{ report_date|display_date }}{% if window.get('timezone') %} ({{ window.get('timezone') }}){% endif %}
+{% if is_partial %}
+
+PARTIAL REPORT
+Unavailable or incomplete: {% for source in partial_sources %}{{ source }}{% if not loop.last %}, {% endif %}{% endfor %}.
+Verified sections below are still safe to use.
+{% endif %}
+
+{{ narrative.headline }}
+{{ narrative.executive_summary }}
+Commentary: {% if narrative.generated_by_ai %}AI-assisted{% if narrative.model %} ({{ narrative.model }}){% endif %}{% else %}deterministic from verified totals{% endif %}
+
+WEEKLY SCORECARD
+Net collected revenue: {{ current.get('net_sales')|money(currency) }} ({{ sales_change|percent(true) }} week over week)
+Orders: {{ current.get('orders')|integer }} ({{ orders_change|percent(true) }} week over week)
+Average order value: {{ current.get('aov')|money(currency) }} ({{ aov_change|percent(true) }} week over week)
+Units: {{ current.get('units')|integer }} ({{ units_change|percent(true) }} week over week)
+Lifetime-to-date refunds attached to orders processed in this window: {{ current.get('refunds')|money(currency) }} across {{ current.get('refund_orders')|integer }} refunded orders
+Refund timing note: this is not the value or count of refunds issued during the week.
+
+WHAT CHANGED
+{% for item in narrative.highlights %}
+- {{ item }}
+{% else %}
+- No additional highlights.
+{% endfor %}
+
+NEXT ACTIONS
+{% for item in narrative.actions %}
+- {{ item }}
+{% else %}
+- Continue monitoring the verified totals.
+{% endfor %}
+
+ACQUISITION
+First-touch order coverage: {{ acquisition.get('order_coverage')|percent }}
+First-touch revenue coverage: {{ acquisition.get('revenue_coverage')|percent }}
+Confidence: {{ acquisition.get('confidence', 'unknown') }}
+{% for row in acquisition_items[:8] %}
+- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} orders, {{ row.get('net_sales')|money(currency) }}, {{ row.get('share')|percent }} share
+{% else %}
+- No attributed acquisition rows available.
+{% endfor %}
+
+SALES CHANNELS
+{% for row in channels[:8] %}
+- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} orders, {{ row.get('net_sales')|money(currency) }}, {{ row.get('share')|percent }} share
+{% else %}
+- No sales-channel rows available.
+{% endfor %}
+
+LANDING-PAGE & CONTENT ASSISTS
+Blog assists: {{ blog_assist.get('orders')|integer }} orders, {{ blog_assist.get('net_sales')|money(currency) }}, {{ blog_assist.get('share')|percent }} share
+By entry-page type:
+{% for row in landing_types[:8] %}
+- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} orders, {{ row.get('net_sales')|money(currency) }}, {{ row.get('share')|percent }} share
+{% else %}
+- No entry-page type data available.
+{% endfor %}
+Top entry paths:
+{% for row in landing_top_pages[:6] %}
+- {{ row.get('label') }}: {{ row.get('orders')|integer }} orders, {{ row.get('net_sales')|money(currency) }}
+{% else %}
+- No entry-path data available.
+{% endfor %}
+
+COUNTRIES
+{% for row in countries[:6] %}
+- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} orders, {{ row.get('net_sales')|money(currency) }}, {{ row.get('share')|percent }} share
+{% else %}
+- No country mix available.
+{% endfor %}
+
+INVENTORY
+Sellable units: {{ stock.get('sellable_units')|integer }}
+Active SKUs: {{ stock.get('active_skus')|integer }}
+Out-of-stock SKUs: {{ stock.get('out_of_stock_skus')|integer }}
+Negative-inventory SKUs: {{ stock.get('negative_inventory_skus')|integer }}
+Priority actions:
+{% for row in stock_actions[:12] %}
+- {{ row.get('action', 'Review') }} — {{ row.get('title', 'Unknown') }}{% if row.get('variant_title') %} / {{ row.get('variant_title') }}{% endif %}; stock {{ row.get('inventory')|integer }}, weeks cover {{ row.get('weeks_cover')|decimal(1) }}
+{% else %}
+- No priority stock action was flagged.
+{% endfor %}
+
+TOP PRODUCTS
+{% for row in products[:10] %}
+- {{ row.get('title', 'Unknown') }}{% if row.get('variant_title') %} / {{ row.get('variant_title') }}{% endif %}: {{ row.get('units')|integer }} units, {{ row.get('line_sales')|money(currency) }}, {{ row.get('sales_change')|percent(true) }} week over week
+{% else %}
+- No product rows available.
+{% endfor %}
+
+{% set mtd = monthly.get('month_to_date', {}) %}
+{% set last_month = monthly.get('last_full_month', {}) %}
+MONTHLY SALES
+Month-to-date net collected revenue: {{ mtd.get('net_sales')|money(currency) }}
+Month-to-date orders: {{ mtd.get('orders')|integer }}
+Month-to-date net-collected change vs prior matched period: {{ mtd.get('comparison', {}).get('net_sales', {}).get('percent')|percent(true) }}
+Last full month net collected revenue: {{ last_month.get('net_sales')|money(currency) }}
+Last full month orders: {{ last_month.get('orders')|integer }}
+Last full month average order value: {{ last_month.get('aov')|money(currency) }}
+Last full month units: {{ last_month.get('units')|integer }}
+
+ORGANIC SEARCH
+{% if gsc_available %}
+Finalized through: {{ gsc.get('as_of')|display_date }}
+Clicks: {{ gsc.get('current', {}).get('clicks')|integer }}
+Impressions: {{ gsc.get('current', {}).get('impressions')|integer }}
+CTR: {{ gsc.get('current', {}).get('ctr')|percent }}
+Average position: {{ gsc.get('current', {}).get('position')|decimal(1) }}
+{% if gsc.get('query_rows_are_partial') %}Note: query-level rows are partial and may omit anonymized searches.{% endif %}
+
+TOP GOOGLE KEYWORDS
+{% for row in gsc_top_queries %}
+- {{ row.get('query') }}: {{ row.get('clicks')|integer }} clicks, {{ row.get('impressions')|integer }} impressions, {{ row.get('ctr')|percent }} CTR, position {{ row.get('position')|decimal(1) }}
+{% else %}
+- No query rows available.
+{% endfor %}
+
+KEYWORD MOVERS
+{% for row in gsc_query_movers %}
+- {{ row.get('query') }} [{{ row.get('type') }}]: {{ row.get('clicks')|integer }} clicks ({{ row.get('click_delta')|signed_integer }}), {{ row.get('impressions')|integer }} impressions ({{ row.get('impression_delta')|signed_integer }}), {{ row.get('ctr')|percent }} CTR ({{ row.get('ctr_delta_pp')|signed_decimal(1) }} pp), position {{ row.get('position')|decimal(1) }} ({{ row.get('position_improvement')|signed_decimal(1) }} improvement)
+{% else %}
+- No material query movers available.
+{% endfor %}
+
+KEYWORD OPPORTUNITIES
+{% for row in gsc_opportunities %}
+- {{ row.get('query') }} [{{ row.get('type') }}]: {{ row.get('clicks')|integer }} clicks, {{ row.get('impressions')|integer }} impressions, {{ row.get('ctr')|percent }} CTR, position {{ row.get('position')|decimal(1) }}
+{% else %}
+- No keyword opportunities met the reporting thresholds.
+{% endfor %}
+{% else %}
+Google Search Console data was not available for this edition.
+{% endif %}
+
+READ WITH CONTEXT
+{% for item in report_caveats %}
+- {{ item }}
+{% endfor %}
+{% for item in data_quality.get('notes', [])[:3] %}
+- {{ item }}
+{% endfor %}
+{% if not narrative.generated_by_ai %}
+- AI commentary was unavailable or disabled; the narrative was generated deterministically from verified aggregate metrics.
+{% endif %}
+
+Internal business pulse. Windows use inclusive starts and exclusive ends.
+No customer-level data is included.
