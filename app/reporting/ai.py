@@ -727,7 +727,8 @@ def generate_weekly_narrative(
                 "schema": NARRATIVE_SCHEMA,
             }
         },
-        "max_output_tokens": 700,
+        "reasoning": {"effort": "low"},
+        "max_output_tokens": 1800,
     }
     client = session or requests
     try:

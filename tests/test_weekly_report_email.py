@@ -437,7 +437,8 @@ def test_generate_narrative_uses_responses_json_schema_and_all_output_items(
     assert output_format["schema"]["additionalProperties"] is False
     assert "private-search@example.com" not in request["json"]["input"]
     assert "8-year-old" in request["json"]["instructions"]
-    assert request["json"]["max_output_tokens"] == 700
+    assert request["json"]["reasoning"] == {"effort": "low"}
+    assert request["json"]["max_output_tokens"] == 1800
 
 
 def test_generate_narrative_falls_back_without_hiding_provider_failure(
