@@ -106,7 +106,7 @@ class Config:
         'gpt-5.6-terra',
     )
     OPENAI_WEEKLY_REPORT_TIMEOUT_SECONDS = float(
-        os.environ.get('OPENAI_WEEKLY_REPORT_TIMEOUT_SECONDS', '30')
+        os.environ.get('OPENAI_WEEKLY_REPORT_TIMEOUT_SECONDS', '60')
     )
 
     # Master switches

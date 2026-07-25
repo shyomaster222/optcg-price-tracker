@@ -18,6 +18,7 @@ import requests
 
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
+OPENAI_MAX_ATTEMPTS = 2
 
 _EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
 _LONG_NUMBER_RE = re.compile(r"\b\d{7,}\b")
@@ -731,31 +732,38 @@ def generate_weekly_narrative(
         "max_output_tokens": 1800,
     }
     client = session or requests
-    try:
-        response = client.post(
-            OPENAI_RESPONSES_URL,
-            headers={
-                "Authorization": f"Bearer {str(api_key).strip()}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-            json=payload,
-            timeout=timeout,
-        )
-        status = int(getattr(response, "status_code", 0) or 0)
-        if status < 200 or status >= 300:
-            raise RuntimeError(_response_error(response))
+    last_error: Exception | None = None
+    for _attempt in range(OPENAI_MAX_ATTEMPTS):
         try:
-            body = response.json()
-        except (TypeError, ValueError) as exc:
-            raise ValueError("OpenAI returned a non-JSON response") from exc
-        if not isinstance(body, Mapping):
-            raise ValueError("OpenAI returned an invalid response object")
-        narrative_payload = _parse_json_text(_extract_response_text(body))
-        return _narrative_from_payload(narrative_payload, model=model)
-    except Exception as exc:
-        error = _safe_text(f"{type(exc).__name__}: {exc}", limit=240)
-        return _fallback_narrative(snapshot, model=model, error=error)
+            response = client.post(
+                OPENAI_RESPONSES_URL,
+                headers={
+                    "Authorization": f"Bearer {str(api_key).strip()}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                json=payload,
+                timeout=timeout,
+            )
+            status = int(getattr(response, "status_code", 0) or 0)
+            if status < 200 or status >= 300:
+                raise RuntimeError(_response_error(response))
+            try:
+                body = response.json()
+            except (TypeError, ValueError) as exc:
+                raise ValueError("OpenAI returned a non-JSON response") from exc
+            if not isinstance(body, Mapping):
+                raise ValueError("OpenAI returned an invalid response object")
+            narrative_payload = _parse_json_text(_extract_response_text(body))
+            return _narrative_from_payload(narrative_payload, model=model)
+        except Exception as exc:
+            last_error = exc
+
+    error = _safe_text(
+        f"{type(last_error).__name__}: {last_error}",
+        limit=240,
+    )
+    return _fallback_narrative(snapshot, model=model, error=error)
 
 
 __all__ = [

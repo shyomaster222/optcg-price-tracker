@@ -520,7 +520,7 @@ def run_weekly_business_report(
                 "OPENAI_WEEKLY_REPORT_MODEL", "gpt-5.6-terra"
             ),
             timeout=float(
-                current_app.config.get("OPENAI_WEEKLY_REPORT_TIMEOUT_SECONDS", 30)
+                current_app.config.get("OPENAI_WEEKLY_REPORT_TIMEOUT_SECONDS", 60)
             ),
         )
         if not narrative.generated_by_ai and not dry_run:

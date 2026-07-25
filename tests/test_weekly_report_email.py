@@ -351,6 +351,16 @@ class RecordingSession:
         return self.response
 
 
+class SequenceSession:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def post(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        return self.responses.pop(0)
+
+
 def test_ai_projection_is_allowlisted_and_excludes_raw_or_query_data(report_snapshot):
     report_snapshot["orders"] = [
         {
@@ -463,6 +473,33 @@ def test_generate_narrative_falls_back_without_hiding_provider_failure(
     )
     assert "HTTP 503" in result.error
     assert result.actions
+    assert len(session.calls) == 2
+
+
+def test_generate_narrative_retries_a_transient_provider_failure(report_snapshot):
+    structured = {
+        "headline": "Sales update",
+        "executive_summary": "Sales are clear and ready to review.",
+        "highlights": ["This year has 90 orders."],
+        "actions": ["Restock the fastest seller."],
+        "caveats": ["Sales sources are best estimates."],
+    }
+    session = SequenceSession(
+        [
+            FakeResponse(503, {"error": {"message": "try again"}}),
+            FakeResponse(200, {"output_text": json.dumps(structured)}),
+        ]
+    )
+
+    result = generate_weekly_narrative(
+        report_snapshot,
+        api_key="test-openai-key",
+        session=session,
+    )
+
+    assert result.generated_by_ai is True
+    assert result.headline == "Sales update"
+    assert len(session.calls) == 2
 
 
 def test_rendered_email_has_simple_windows_escaped_content_and_three_cids(
