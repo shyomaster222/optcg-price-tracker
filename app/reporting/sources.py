@@ -149,27 +149,47 @@ class ShopifyReportClient:
         self,
         *,
         shop: str,
-        token: str,
+        token: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
         api_version: str = "2026-07",
         session=None,
         timeout: float = 45,
         max_retries: int = 3,
         sleeper=time.sleep,
+        clock=time.monotonic,
     ):
-        if not shop or not token:
-            raise ValueError("Shopify shop and report token are required")
+        if not shop:
+            raise ValueError("Shopify shop is required")
+        if bool(client_id) != bool(client_secret):
+            raise ValueError(
+                "Shopify report client ID and client secret must be provided together"
+            )
+        if not token and not (client_id and client_secret):
+            raise ValueError(
+                "Shopify report token or client credentials are required"
+            )
         self.shop = shop.removeprefix("https://").rstrip("/")
         self.token = token
+        self.client_id = client_id
+        self.client_secret = client_secret
         self.api_version = api_version
         self.session = session or requests.Session()
         self.timeout = timeout
         self.max_retries = max_retries
         self.sleeper = sleeper
+        self.clock = clock
+        self._oauth_access_token: str | None = None
+        self._oauth_token_expires_at = 0.0
         self.warnings: list[str] = []
 
     @property
     def endpoint(self) -> str:
         return f"https://{self.shop}/admin/api/{self.api_version}/graphql.json"
+
+    @property
+    def token_endpoint(self) -> str:
+        return f"https://{self.shop}/admin/oauth/access_token"
 
     def _delay(self, response, attempt: int) -> float:
         value = (getattr(response, "headers", {}) or {}).get("Retry-After")
@@ -187,6 +207,104 @@ class ShopifyReportClient:
                     pass
         return min((2 ** attempt) + random.random(), 10.0)
 
+    def _mint_client_credentials_token(self) -> str:
+        """Exchange Dev Dashboard credentials for a short-lived Admin token."""
+
+        last_error: Exception | None = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self.session.post(
+                    self.token_endpoint,
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    data={
+                        "grant_type": "client_credentials",
+                        "client_id": self.client_id,
+                        "client_secret": self.client_secret,
+                    },
+                    timeout=self.timeout,
+                )
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                last_error = exc
+                if attempt >= self.max_retries:
+                    break
+                self.sleeper(min((2 ** attempt) + random.random(), 10.0))
+                continue
+
+            if response.status_code == 429 or response.status_code >= 500:
+                last_error = ReportSourceError(
+                    f"Shopify token endpoint returned HTTP {response.status_code}"
+                )
+                if attempt >= self.max_retries:
+                    break
+                self.sleeper(self._delay(response, attempt))
+                continue
+
+            if response.status_code in {401, 403}:
+                raise ReportSourceError(
+                    "Shopify report client credentials are unauthorized"
+                )
+            if response.status_code >= 400:
+                raise ReportSourceError(
+                    "Shopify client credentials request failed with "
+                    f"HTTP {response.status_code}"
+                )
+            try:
+                body = response.json()
+            except ValueError as exc:
+                raise ReportSourceError(
+                    "Shopify client credentials response was not valid JSON"
+                ) from exc
+            if not isinstance(body, dict):
+                raise ReportSourceError(
+                    "Shopify client credentials response was not a JSON object"
+                )
+
+            access_token = body.get("access_token")
+            if not access_token:
+                raise ReportSourceError(
+                    "Shopify client credentials response did not contain an access token"
+                )
+            try:
+                expires_in = float(body.get("expires_in", 86400))
+            except (TypeError, ValueError) as exc:
+                raise ReportSourceError(
+                    "Shopify client credentials response had an invalid expiry"
+                ) from exc
+            if expires_in <= 0:
+                raise ReportSourceError(
+                    "Shopify client credentials response had an invalid expiry"
+                )
+
+            # Refresh before Shopify's expiry boundary. A report process normally
+            # exits after one run, but this also keeps long-lived workers safe.
+            refresh_margin = min(60.0, expires_in * 0.1)
+            self._oauth_access_token = str(access_token)
+            self._oauth_token_expires_at = (
+                self.clock() + expires_in - refresh_margin
+            )
+            return self._oauth_access_token
+
+        error_type = type(last_error).__name__ if last_error else "unknown error"
+        raise ReportSourceError(
+            "Shopify client credentials request failed after retries "
+            f"({error_type})"
+        )
+
+    def _access_token(self) -> str:
+        # Dev Dashboard credentials are preferred when configured. The static
+        # token remains a compatibility fallback for existing custom apps.
+        if self.client_id and self.client_secret:
+            if (
+                self._oauth_access_token
+                and self.clock() < self._oauth_token_expires_at
+            ):
+                return self._oauth_access_token
+            return self._mint_client_credentials_token()
+        return str(self.token)
+
     def _post(self, payload: dict):
         last_error = None
         for attempt in range(self.max_retries + 1):
@@ -194,7 +312,7 @@ class ShopifyReportClient:
                 response = self.session.post(
                     self.endpoint,
                     headers={
-                        "X-Shopify-Access-Token": self.token,
+                        "X-Shopify-Access-Token": self._access_token(),
                         "Content-Type": "application/json",
                         "Accept": "application/json",
                     },

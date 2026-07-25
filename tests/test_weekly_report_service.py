@@ -86,6 +86,8 @@ def _enable_delivery(app, monkeypatch) -> None:
 def test_reporting_shopify_connection_is_separate_from_price_sync(app):
     app.config["SHOPIFY_REPORT_SHOP"] = "reporting.myshopify.com"
     app.config["SHOPIFY_REPORT_API_VERSION"] = "2026-07"
+    app.config["SHOPIFY_REPORT_CLIENT_ID"] = None
+    app.config["SHOPIFY_REPORT_CLIENT_SECRET"] = None
     app.config["SHOPIFY_REPORT_TOKEN"] = "report-token"
     app.config["SHOPIFY_SHOP"] = "price-sync.myshopify.com"
     app.config["SHOPIFY_API_VERSION"] = "2025-01"
@@ -97,6 +99,48 @@ def test_reporting_shopify_connection_is_separate_from_price_sync(app):
     assert client.shop == "reporting.myshopify.com"
     assert client.api_version == "2026-07"
     assert client.token == "report-token"
+
+
+def test_reporting_shopify_client_credentials_are_preferred(app):
+    app.config["SHOPIFY_REPORT_SHOP"] = "reporting.myshopify.com"
+    app.config["SHOPIFY_REPORT_API_VERSION"] = "2026-07"
+    app.config["SHOPIFY_REPORT_CLIENT_ID"] = "report-client-id"
+    app.config["SHOPIFY_REPORT_CLIENT_SECRET"] = "report-client-secret"
+    app.config["SHOPIFY_REPORT_TOKEN"] = "static-fallback"
+
+    with app.app_context():
+        client = service._shopify_client()
+
+    assert client.client_id == "report-client-id"
+    assert client.client_secret == "report-client-secret"
+    assert client.token == "static-fallback"
+
+
+def test_reporting_shopify_client_credentials_must_be_complete(app):
+    app.config["SHOPIFY_REPORT_CLIENT_ID"] = "report-client-id"
+    app.config["SHOPIFY_REPORT_CLIENT_SECRET"] = None
+    app.config["SHOPIFY_REPORT_TOKEN"] = "static-fallback"
+
+    with app.app_context(), pytest.raises(
+        service.WeeklyReportError,
+        match=(
+            "SHOPIFY_REPORT_CLIENT_ID and SHOPIFY_REPORT_CLIENT_SECRET "
+            "must be set together"
+        ),
+    ):
+        service._shopify_client()
+
+
+def test_reporting_errors_redact_shopify_client_secret(app):
+    app.config["SHOPIFY_REPORT_CLIENT_SECRET"] = "do-not-leak-this"
+
+    with app.app_context():
+        message = service._safe_error(
+            RuntimeError("credential do-not-leak-this was rejected")
+        )
+
+    assert "do-not-leak-this" not in message
+    assert "[redacted]" in message
 
 
 def _install_report_stubs(monkeypatch, *, send):
@@ -480,6 +524,8 @@ def test_reporting_client_never_falls_back_to_write_token(
     app,
     monkeypatch,
 ):
+    monkeypatch.setitem(app.config, "SHOPIFY_REPORT_CLIENT_ID", None)
+    monkeypatch.setitem(app.config, "SHOPIFY_REPORT_CLIENT_SECRET", None)
     monkeypatch.setitem(app.config, "SHOPIFY_REPORT_TOKEN", None)
     monkeypatch.setitem(app.config, "SHOPIFY_ADMIN_TOKEN", "write-capable-token")
     monkeypatch.setitem(app.config, "SHOPIFY_SHOP", "example.myshopify.com")

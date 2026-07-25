@@ -102,6 +102,7 @@ def _safe_error(exc: Exception, limit: int = 500) -> str:
     text = f"{type(exc).__name__}: {exc}"
     for secret_name in (
         "SHOPIFY_REPORT_TOKEN",
+        "SHOPIFY_REPORT_CLIENT_SECRET",
         "SHOPIFY_ADMIN_TOKEN",
         "GSC_CLIENT_SECRET",
         "GSC_REFRESH_TOKEN",
@@ -121,15 +122,25 @@ def _required(value, name: str):
 
 
 def _shopify_client() -> ShopifyReportClient:
+    client_id = current_app.config.get("SHOPIFY_REPORT_CLIENT_ID")
+    client_secret = current_app.config.get("SHOPIFY_REPORT_CLIENT_SECRET")
+    if bool(client_id) != bool(client_secret):
+        raise WeeklyReportError(
+            "SHOPIFY_REPORT_CLIENT_ID and SHOPIFY_REPORT_CLIENT_SECRET "
+            "must be set together"
+        )
+    token = current_app.config.get("SHOPIFY_REPORT_TOKEN")
+    if not client_id:
+        token = _required(token, "SHOPIFY_REPORT_TOKEN")
+
     return ShopifyReportClient(
         shop=_required(
             current_app.config.get("SHOPIFY_REPORT_SHOP"),
             "SHOPIFY_REPORT_SHOP",
         ),
-        token=_required(
-            current_app.config.get("SHOPIFY_REPORT_TOKEN"),
-            "SHOPIFY_REPORT_TOKEN",
-        ),
+        token=token,
+        client_id=client_id,
+        client_secret=client_secret,
         api_version=current_app.config.get(
             "SHOPIFY_REPORT_API_VERSION",
             "2026-07",

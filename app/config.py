@@ -76,6 +76,10 @@ class Config:
         'SHOPIFY_REPORT_API_VERSION',
         '2026-07',
     )
+    SHOPIFY_REPORT_CLIENT_ID = os.environ.get('SHOPIFY_REPORT_CLIENT_ID')
+    SHOPIFY_REPORT_CLIENT_SECRET = os.environ.get(
+        'SHOPIFY_REPORT_CLIENT_SECRET'
+    )
     SHOPIFY_REPORT_TOKEN = os.environ.get('SHOPIFY_REPORT_TOKEN')
 
     # ------------------------------------------------------------------

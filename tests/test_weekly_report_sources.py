@@ -70,6 +70,115 @@ def _gsc_client(session: Mock) -> GoogleSearchConsoleClient:
     )
 
 
+def test_shopify_client_credentials_mints_and_reuses_short_lived_token():
+    session = Mock()
+    now = [100.0]
+    session.post.side_effect = [
+        _Response(
+            {
+                "access_token": "runtime-token",
+                "scope": "read_all_orders,read_orders,read_products",
+                "expires_in": 86400,
+            }
+        ),
+        _shopify_response({"data": {"shop": {"name": "RCJ"}}}),
+        _shopify_response({"data": {"shop": {"name": "RCJ"}}}),
+    ]
+    client = ShopifyReportClient(
+        shop="example.myshopify.com",
+        client_id="report-client-id",
+        client_secret="report-client-secret",
+        session=session,
+        max_retries=0,
+        sleeper=lambda _: None,
+        clock=lambda: now[0],
+    )
+
+    assert client.graphql("query { shop { name } }")["shop"]["name"] == "RCJ"
+    assert client.graphql("query { shop { name } }")["shop"]["name"] == "RCJ"
+
+    token_call, first_api_call, second_api_call = session.post.call_args_list
+    assert token_call.args[0] == (
+        "https://example.myshopify.com/admin/oauth/access_token"
+    )
+    assert token_call.kwargs["data"] == {
+        "grant_type": "client_credentials",
+        "client_id": "report-client-id",
+        "client_secret": "report-client-secret",
+    }
+    assert token_call.kwargs["headers"]["Content-Type"] == (
+        "application/x-www-form-urlencoded"
+    )
+    assert first_api_call.kwargs["headers"]["X-Shopify-Access-Token"] == (
+        "runtime-token"
+    )
+    assert second_api_call.kwargs["headers"]["X-Shopify-Access-Token"] == (
+        "runtime-token"
+    )
+
+
+def test_shopify_client_credentials_refreshes_before_expiry():
+    session = Mock()
+    now = [100.0]
+    session.post.side_effect = [
+        _Response({"access_token": "first-token", "expires_in": 120}),
+        _shopify_response({"data": {"shop": {"name": "RCJ"}}}),
+        _Response({"access_token": "second-token", "expires_in": 120}),
+        _shopify_response({"data": {"shop": {"name": "RCJ"}}}),
+    ]
+    client = ShopifyReportClient(
+        shop="example.myshopify.com",
+        token="static-fallback",
+        client_id="report-client-id",
+        client_secret="report-client-secret",
+        session=session,
+        max_retries=0,
+        sleeper=lambda _: None,
+        clock=lambda: now[0],
+    )
+
+    client.graphql("query { shop { name } }")
+    now[0] = 209.0
+    client.graphql("query { shop { name } }")
+
+    assert session.post.call_args_list[1].kwargs["headers"][
+        "X-Shopify-Access-Token"
+    ] == "first-token"
+    assert session.post.call_args_list[3].kwargs["headers"][
+        "X-Shopify-Access-Token"
+    ] == "second-token"
+
+
+def test_shopify_client_credentials_errors_do_not_include_secret():
+    session = Mock()
+    session.post.return_value = _Response(
+        {"error": "invalid_client"},
+        status_code=401,
+    )
+    client = ShopifyReportClient(
+        shop="example.myshopify.com",
+        client_id="report-client-id",
+        client_secret="do-not-leak-this",
+        session=session,
+        max_retries=0,
+        sleeper=lambda _: None,
+    )
+
+    with pytest.raises(ReportSourceError) as error:
+        client.graphql("query { shop { name } }")
+
+    assert "unauthorized" in str(error.value)
+    assert "do-not-leak-this" not in str(error.value)
+
+
+def test_shopify_client_credentials_must_be_complete():
+    with pytest.raises(ValueError, match="must be provided together"):
+        ShopifyReportClient(
+            shop="example.myshopify.com",
+            client_id="report-client-id",
+        )
+
+
 def test_shopify_fetch_orders_paginates_lines_and_keeps_partial_journeys():
     session = Mock()
     online_one = {

@@ -114,7 +114,8 @@ WEEKLY_REPORT_B2B_TAGS=B2B,Wholesale
 
 SHOPIFY_REPORT_SHOP=48wpjk-rh.myshopify.com
 SHOPIFY_REPORT_API_VERSION=2026-07
-SHOPIFY_REPORT_TOKEN=shpat_read_only_xxxxxxxxxxxx
+SHOPIFY_REPORT_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+SHOPIFY_REPORT_CLIENT_SECRET=shpss_xxxxxxxxxxxxxxxxxxxxxxxx
 
 GSC_CLIENT_ID=xxxxxxxxxxxx.apps.googleusercontent.com
 GSC_CLIENT_SECRET=GOCSPX_xxxxxxxxxxxxxxxxxxxx
@@ -133,11 +134,19 @@ COMPANY_EMAIL=admin@rarecardsjapan.com
 `COMPANY_EMAIL`, but setting them explicitly on the cron service makes the
 delivery target auditable.
 
-Create `SHOPIFY_REPORT_TOKEN` as a dedicated read-only Shopify credential with
-`read_orders`, `read_all_orders`, and `read_products`. The reporting shop,
-version, and token are intentionally separate from the write-capable
-`SHOPIFY_SHOP`, `SHOPIFY_API_VERSION`, and `SHOPIFY_ADMIN_TOKEN` settings used
-by price sync. Never copy `SHOPIFY_ADMIN_TOKEN` into `SHOPIFY_REPORT_TOKEN`.
+Create and install a dedicated Shopify Dev Dashboard app with only
+`read_orders`, `read_all_orders`, and `read_products`. Set its client ID and
+client secret as `SHOPIFY_REPORT_CLIENT_ID` and
+`SHOPIFY_REPORT_CLIENT_SECRET`. Each report process exchanges those credentials
+at `/admin/oauth/access_token` for a short-lived Admin API token and refreshes
+it before expiry; the access token does not need to be stored in Railway.
+
+For compatibility with an existing custom app, `SHOPIFY_REPORT_TOKEN` can be
+used when both client-credential settings are unset. When client credentials
+are present they take precedence. Never copy the write-capable
+`SHOPIFY_ADMIN_TOKEN` into any reporting setting. The reporting shop, version,
+and credentials are intentionally separate from `SHOPIFY_SHOP`,
+`SHOPIFY_API_VERSION`, and `SHOPIFY_ADMIN_TOKEN` used by price sync.
 
 The Google OAuth user represented by `GSC_REFRESH_TOKEN` must have access to
 the property named by `GSC_PROPERTY`. The Resend sender must be on a verified
