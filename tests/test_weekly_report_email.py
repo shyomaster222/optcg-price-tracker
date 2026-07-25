@@ -27,8 +27,24 @@ def report_snapshot():
             "timezone": "Asia/Hong_Kong",
             "current_start": "2026-07-18T00:00:00+08:00",
             "current_end": "2026-07-25T00:00:00+08:00",
+            "year_start": "2026-01-01T00:00:00+08:00",
+            "analysis_start": "2026-04-26T00:00:00+08:00",
         },
         "currency": "USD",
+        "year_to_date": {
+            "net_sales": 88_210.62,
+            "orders": 90,
+            "aov": 980.12,
+            "units": 146,
+            "refunds": 200,
+        },
+        "analysis_window": {
+            "label": "Last 90 days",
+            "days": 90,
+            "start": "2026-04-26",
+            "end": "2026-07-24",
+            "orders": 15,
+        },
         "weekly": {
             "current": {
                 "net_sales": 12_500,
@@ -94,6 +110,19 @@ def report_snapshot():
                 "orders": 110,
                 "aov": 481.82,
                 "units": 175,
+                "comparison": {
+                    "net_sales": {
+                        "previous": 48_000,
+                        "absolute": 5_000,
+                        "percent": 5_000 / 48_000,
+                    }
+                },
+            },
+            "previous_full_month": {
+                "net_sales": 48_000,
+                "orders": 102,
+                "aov": 470.59,
+                "units": 160,
             },
         },
         "trend": [
@@ -212,7 +241,7 @@ def report_snapshot():
                     "units_90d": 21,
                     "weekly_velocity": 2,
                     "weeks_cover": 0.5,
-                    "action": "Reorder review",
+                    "action": "Order soon",
                 }
             ],
         },
@@ -348,6 +377,15 @@ def test_ai_projection_is_allowlisted_and_excludes_raw_or_query_data(report_snap
         "start": "2026-06-25",
         "end": "2026-07-22",
     }
+    assert projection["year_to_date"]["net_sales"] == 88_210.62
+    assert projection["analysis_window"] == {
+        "label": "Last 90 days",
+        "days": 90,
+        "start": "2026-04-26",
+        "end": "2026-07-24",
+        "orders": 15,
+    }
+    assert projection["monthly"]["previous_full_month"]["net_sales"] == 48_000
 
 
 def test_generate_narrative_uses_responses_json_schema_and_all_output_items(
@@ -398,6 +436,8 @@ def test_generate_narrative_uses_responses_json_schema_and_all_output_items(
     assert output_format["strict"] is True
     assert output_format["schema"]["additionalProperties"] is False
     assert "private-search@example.com" not in request["json"]["input"]
+    assert "8-year-old" in request["json"]["instructions"]
+    assert request["json"]["max_output_tokens"] == 700
 
 
 def test_generate_narrative_falls_back_without_hiding_provider_failure(
@@ -418,13 +458,13 @@ def test_generate_narrative_falls_back_without_hiding_provider_failure(
 
     assert result.generated_by_ai is False
     assert result.executive_summary.startswith(
-        "Net collected revenue was USD 12,500.00"
+        "This year has brought in USD 88,210.62"
     )
     assert "HTTP 503" in result.error
     assert result.actions
 
 
-def test_rendered_email_has_escaped_content_plain_text_and_three_cids(
+def test_rendered_email_has_simple_windows_escaped_content_and_three_cids(
     report_snapshot,
 ):
     report_snapshot["products"]["items"][0]["title"] = "<script>alert(1)</script>"
@@ -452,29 +492,34 @@ def test_rendered_email_has_escaped_content_plain_text_and_three_cids(
     assert "Verified <em>summary</em>." in rendered.text
     assert "@media only screen" in rendered.html
     assert "Rare_Cards_Japan.png" in rendered.html
-    assert "Sales week 18 Jul 2026–24 Jul 2026" in rendered.html
-    assert "Latest 7 finalized days" in rendered.html
+    assert "Week: 18 Jul 2026–24 Jul 2026" in rendered.html
+    assert "Sales this year" in rendered.html
+    assert "USD 88,211" in rendered.html
+    assert "Last 90 days" in rendered.html
+    assert "26 Apr 2026–24 Jul 2026" in rendered.html
+    assert "Latest 7 full days" in rendered.html
     assert "16 Jul 2026–22 Jul 2026" in rendered.html
-    assert "not month-to-date or daily figures" in rendered.html
-    assert "Latest 28 finalized days" in rendered.html
+    assert "Latest 28 full days" in rendered.html
     assert "25 Jun 2026–22 Jul 2026" in rendered.html
-    assert "Blog assists:" in rendered.html
+    assert "Blog first pages:" in rendered.html
     assert "/blogs/one-piece-card-guides" in rendered.html
     assert "Last full month" in rendered.html
     assert "USD 53,000" in rendered.html
-    assert "Top Google keywords" in rendered.html
+    assert "vs month before" in rendered.html
+    assert "Top Google searches" in rendered.html
     assert "one piece booster box" in rendered.html
-    assert "Keyword movers" in rendered.html
+    assert "Searches going up or down" in rendered.html
     assert "rare cards japan" in rendered.html
-    assert "Keyword opportunities" in rendered.html
+    assert "Searches to improve" in rendered.html
     assert "customer name" in rendered.html
+    assert "WoW" not in rendered.html
     assert "private-search@example.com" not in rendered.html
     assert "https://example.test/private" not in rendered.html
-    assert "TOP GOOGLE KEYWORDS" in rendered.text
-    assert "latest 7 finalized days" in rendered.text
-    assert "latest 28 finalized days" in rendered.text
-    assert "Last full month net collected revenue: USD 53,000" in rendered.text
-    assert "not refunds issued during the week" in rendered.text
+    assert "TOP GOOGLE SEARCHES" in rendered.text
+    assert "Latest 7 full days" in rendered.text
+    assert "Latest 28 full days" in rendered.text
+    assert "Last full month: USD 53,000" in rendered.text
+    assert "Sales collected means payments" in rendered.text
     assert "https://example.test/private" not in rendered.text
     assert len(rendered.attachments) == 3
     assert len({attachment.content_id for attachment in rendered.attachments}) == 3

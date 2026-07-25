@@ -1,154 +1,148 @@
-RARE CARDS JAPAN — WEEKLY BUSINESS PULSE
-Sales week: {{ window.get('current_start')|display_date }}–{{ report_date|display_date }}{% if window.get('timezone') %} ({{ window.get('timezone') }}){% endif %}
+RARE CARDS JAPAN — SALES UPDATE
+Week: {{ window.get('current_start')|display_date }}–{{ report_date|display_date }}
 {% if is_partial %}
 
-PARTIAL REPORT
-Unavailable or incomplete: {% for source in partial_sources %}{{ source }}{% if not loop.last %}, {% endif %}{% endfor %}.
-Verified sections below are still safe to use.
+SOME DATA IS MISSING
+Missing: {% for source in partial_sources %}{{ source }}{% if not loop.last %}, {% endif %}{% endfor %}.
+The other numbers are ready.
 {% endif %}
 
-{{ narrative.headline }}
-{{ narrative.executive_summary }}
-Commentary: {% if narrative.generated_by_ai %}AI-assisted{% if narrative.model %} ({{ narrative.model }}){% endif %}{% else %}deterministic from verified totals{% endif %}
-
-WEEKLY SCORECARD
-Net collected revenue: {{ current.get('net_sales')|money(currency) }} ({{ sales_change|percent(true) }} week over week)
-Orders: {{ current.get('orders')|integer }} ({{ orders_change|percent(true) }} week over week)
-Average order value: {{ current.get('aov')|money(currency) }} ({{ aov_change|percent(true) }} week over week)
-Units: {{ current.get('units')|integer }} ({{ units_change|percent(true) }} week over week)
-Lifetime-to-date refunds attached to orders processed in this window: {{ current.get('refunds')|money(currency) }} across {{ current.get('refund_orders')|integer }} refunded orders
-Refund timing note: this is not the value or count of refunds issued during the week.
-
-WHAT CHANGED
-{% for item in narrative.highlights %}
-- {{ item }}
-{% else %}
-- No additional highlights.
-{% endfor %}
-
-NEXT ACTIONS
-{% for item in narrative.actions %}
-- {{ item }}
-{% else %}
-- Continue monitoring the verified totals.
-{% endfor %}
-
-ACQUISITION
-First-touch order coverage: {{ acquisition.get('order_coverage')|percent }}
-First-touch revenue coverage: {{ acquisition.get('revenue_coverage')|percent }}
-Confidence: {{ acquisition.get('confidence', 'unknown') }}
-{% for row in acquisition_items[:8] %}
-- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} orders, {{ row.get('net_sales')|money(currency) }}, {{ row.get('share')|percent }} share
-{% else %}
-- No attributed acquisition rows available.
-{% endfor %}
-
-SALES CHANNELS
-{% for row in channels[:8] %}
-- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} orders, {{ row.get('net_sales')|money(currency) }}, {{ row.get('share')|percent }} share
-{% else %}
-- No sales-channel rows available.
-{% endfor %}
-
-LANDING-PAGE & CONTENT ASSISTS
-Blog assists: {{ blog_assist.get('orders')|integer }} orders, {{ blog_assist.get('net_sales')|money(currency) }}, {{ blog_assist.get('share')|percent }} share
-By entry-page type:
-{% for row in landing_types[:8] %}
-- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} orders, {{ row.get('net_sales')|money(currency) }}, {{ row.get('share')|percent }} share
-{% else %}
-- No entry-page type data available.
-{% endfor %}
-Top entry paths:
-{% for row in landing_top_pages[:6] %}
-- {{ row.get('label') }}: {{ row.get('orders')|integer }} orders, {{ row.get('net_sales')|money(currency) }}
-{% else %}
-- No entry-path data available.
-{% endfor %}
-
-COUNTRIES
-{% for row in countries[:6] %}
-- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} orders, {{ row.get('net_sales')|money(currency) }}, {{ row.get('share')|percent }} share
-{% else %}
-- No country mix available.
-{% endfor %}
-
-INVENTORY
-Sellable units: {{ stock.get('sellable_units')|integer }}
-Active SKUs: {{ stock.get('active_skus')|integer }}
-Out-of-stock SKUs: {{ stock.get('out_of_stock_skus')|integer }}
-Negative-inventory SKUs: {{ stock.get('negative_inventory_skus')|integer }}
-Priority actions:
-{% for row in stock_actions[:12] %}
-- {{ row.get('action', 'Review') }} — {{ row.get('title', 'Unknown') }}{% if row.get('variant_title') %} / {{ row.get('variant_title') }}{% endif %}; stock {{ row.get('inventory')|integer }}, weeks cover {{ row.get('weeks_cover')|decimal(1) }}
-{% else %}
-- No priority stock action was flagged.
-{% endfor %}
-
-TOP PRODUCTS
-{% for row in products[:10] %}
-- {{ row.get('title', 'Unknown') }}{% if row.get('variant_title') %} / {{ row.get('variant_title') }}{% endif %}: {{ row.get('units')|integer }} units, {{ row.get('line_sales')|money(currency) }}, {{ row.get('sales_change')|percent(true) }} week over week
-{% else %}
-- No product rows available.
-{% endfor %}
+SALES THIS YEAR
+{{ year_to_date.get('net_sales')|money(currency) }}
+{{ year_to_date.get('orders')|integer }} {{ year_to_date.get('orders')|plural('order') }}
+{{ window.get('year_start')|display_date }}–{{ report_date|display_date }}
 
 {% set mtd = monthly.get('month_to_date', {}) %}
 {% set last_month = monthly.get('last_full_month', {}) %}
-MONTHLY SALES
-Month-to-date net collected revenue: {{ mtd.get('net_sales')|money(currency) }}
-Month-to-date orders: {{ mtd.get('orders')|integer }}
-Month-to-date net-collected change vs prior matched period: {{ mtd.get('comparison', {}).get('net_sales', {}).get('percent')|percent(true) }}
-Last full month net collected revenue: {{ last_month.get('net_sales')|money(currency) }}
-Last full month orders: {{ last_month.get('orders')|integer }}
-Last full month average order value: {{ last_month.get('aov')|money(currency) }}
-Last full month units: {{ last_month.get('units')|integer }}
+SALES AT A GLANCE
+This month: {{ mtd.get('net_sales')|money(currency) }}
+Change vs the same days last month: {{ mtd.get('comparison', {}).get('net_sales', {}).get('percent')|percent(true) }}
+Last full month: {{ last_month.get('net_sales')|money(currency) }}
+Change vs the month before: {{ last_month.get('comparison', {}).get('net_sales', {}).get('percent')|percent(true) }}
+This week: {{ current.get('net_sales')|money(currency) }}
+Orders this week: {{ current.get('orders')|integer }}
+Units this week: {{ current.get('units')|integer }}
+Refunds linked to this week's orders so far: {{ current.get('refunds')|money(currency) }}
 
-ORGANIC SEARCH
+QUICK VIEW
+{{ narrative.headline }}
+{{ narrative.executive_summary }}
+
+WHAT HAPPENED
+{% for item in narrative.highlights %}
+- {{ item }}
+{% else %}
+- No new facts this week.
+{% endfor %}
+
+WHAT TO DO NEXT
+{% for item in narrative.actions %}
+- {{ item }}
+{% else %}
+- Keep watching the report.
+{% endfor %}
+
+WHERE SALES CAME FROM
+{{ analysis_window.get('label', 'Last 90 days') }}: {{ analysis_window.get('start')|display_date }}–{{ analysis_window.get('end')|display_date }}
+Based on {{ analysis_window.get('orders')|integer }} orders.
+We found a source for {{ acquisition.get('order_coverage')|percent }} of online orders.
+Sources:
+{% for row in acquisition_items[:8] %}
+- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} {{ row.get('orders')|plural('order') }}, {{ row.get('net_sales')|money(currency) }}, {{ row.get('share')|percent }} of tracked sales
+{% else %}
+- No source data for this period.
+{% endfor %}
+Sales channels:
+{% for row in channels[:8] %}
+- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} {{ row.get('orders')|plural('order') }}, {{ row.get('net_sales')|money(currency) }}, {{ row.get('share')|percent }} of sales
+{% else %}
+- No sales channel data for this period.
+{% endfor %}
+
+PAGES THAT HELPED
+These are the first pages buyers saw in the last 90 days.
+Blog first pages: {{ blog_assist.get('orders')|integer }} {{ blog_assist.get('orders')|plural('order') }}, {{ blog_assist.get('net_sales')|money(currency) }}
+{% for row in landing_types[:8] %}
+- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} {{ row.get('orders')|plural('order') }}, {{ row.get('net_sales')|money(currency) }}
+{% else %}
+- No first-page data for this period.
+{% endfor %}
+Top first pages:
+{% for row in landing_top_pages[:6] %}
+- {{ row.get('label') }}: {{ row.get('orders')|integer }} {{ row.get('orders')|plural('order') }}, {{ row.get('net_sales')|money(currency) }}
+{% else %}
+- No first pages to show.
+{% endfor %}
+
+TOP COUNTRIES
+Last 90 days:
+{% for row in countries[:6] %}
+- {{ row.get('label', 'Unknown') }}: {{ row.get('orders')|integer }} {{ row.get('orders')|plural('order') }}, {{ row.get('net_sales')|money(currency) }}, {{ row.get('share')|percent }} of sales
+{% else %}
+- No country sales for this period.
+{% endfor %}
+
+STOCK NOW
+Ready-to-sell units: {{ stock.get('sellable_units')|integer }}
+Stock items: {{ stock.get('active_skus')|integer }}
+Out of stock: {{ stock.get('out_of_stock_skus')|integer }}
+Stock to check:
+{% for row in stock_actions[:12] %}
+- {{ row.get('action', 'Check') }} — {{ row.get('title', 'Unknown') }}{% if row.get('variant_title') and row.get('variant_title') != 'Default Title' %} / {{ row.get('variant_title') }}{% endif %}; stock {{ row.get('inventory')|integer }}, lasts {{ row.get('weeks_cover')|decimal(1) }} weeks
+{% else %}
+- No stock needs action now.
+{% endfor %}
+
+TOP-SELLING PRODUCTS
+Last 90 days:
+{% for row in products[:10] %}
+- {{ row.get('title', 'Unknown') }}{% if row.get('variant_title') and row.get('variant_title') != 'Default Title' %} / {{ row.get('variant_title') }}{% endif %}: {{ row.get('units')|integer }} {{ row.get('units')|plural('unit') }}, {{ row.get('line_sales')|money(currency) }}
+{% else %}
+- No product sales for this period.
+{% endfor %}
+
+GOOGLE SEARCH
 {% if gsc_available %}
-Summary period: latest 7 finalized days, {{ gsc.get('weekly_window', {}).get('start')|display_date }}–{{ gsc.get('weekly_window', {}).get('end')|display_date }}{% if gsc.get('timezone') %} ({{ gsc.get('timezone') }}){% endif %}
-These are weekly totals, not month-to-date or daily figures.
-7-day clicks: {{ gsc.get('current', {}).get('clicks')|integer }}
-7-day impressions: {{ gsc.get('current', {}).get('impressions')|integer }}
-7-day CTR: {{ gsc.get('current', {}).get('ctr')|percent }}
-7-day average position: {{ gsc.get('current', {}).get('position')|decimal(1) }}
-Finalized through: {{ gsc.get('as_of')|display_date }}
-{% if gsc.get('query_rows_are_partial') %}Note: query-level rows are partial and may omit anonymized searches.{% endif %}
+Latest 7 full days: {{ gsc.get('weekly_window', {}).get('start')|display_date }}–{{ gsc.get('weekly_window', {}).get('end')|display_date }}
+Clicks: {{ gsc.get('current', {}).get('clicks')|integer }}
+Times seen: {{ gsc.get('current', {}).get('impressions')|integer }}
+Click rate: {{ gsc.get('current', {}).get('ctr')|percent }}
+Average rank: {{ gsc.get('current', {}).get('position')|decimal(1) }}
+Google has complete data through {{ gsc.get('as_of')|display_date }}.
+{% if gsc.get('query_rows_are_partial') %}Google hides some search terms, so this list is not complete.{% endif %}
 
-TOP GOOGLE KEYWORDS
-Period: latest 28 finalized days, {{ gsc.get('query_window', {}).get('start')|display_date }}–{{ gsc.get('query_window', {}).get('end')|display_date }}
+TOP GOOGLE SEARCHES
+Latest 28 full days: {{ gsc.get('query_window', {}).get('start')|display_date }}–{{ gsc.get('query_window', {}).get('end')|display_date }}
 {% for row in gsc_top_queries %}
-- {{ row.get('query') }}: {{ row.get('clicks')|integer }} clicks, {{ row.get('impressions')|integer }} impressions, {{ row.get('ctr')|percent }} CTR, position {{ row.get('position')|decimal(1) }}
+- {{ row.get('query') }}: {{ row.get('clicks')|integer }} clicks, seen {{ row.get('impressions')|integer }} times, {{ row.get('ctr')|percent }} click rate, rank {{ row.get('position')|decimal(1) }}
 {% else %}
-- No query rows available.
+- No search words to show.
 {% endfor %}
 
-KEYWORD MOVERS
-Comparison: latest 28 finalized days vs {{ gsc.get('previous_query_window', {}).get('start')|display_date }}–{{ gsc.get('previous_query_window', {}).get('end')|display_date }}
+SEARCHES GOING UP OR DOWN
 {% for row in gsc_query_movers %}
-- {{ row.get('query') }} [{{ row.get('type') }}]: {{ row.get('clicks')|integer }} clicks ({{ row.get('click_delta')|signed_integer }}), {{ row.get('impressions')|integer }} impressions ({{ row.get('impression_delta')|signed_integer }}), {{ row.get('ctr')|percent }} CTR ({{ row.get('ctr_delta_pp')|signed_decimal(1) }} pp), position {{ row.get('position')|decimal(1) }} ({{ row.get('position_improvement')|signed_decimal(1) }} improvement)
+- {{ row.get('query') }}: {{ row.get('clicks')|integer }} clicks ({{ row.get('click_delta')|signed_integer }}), seen {{ row.get('impressions')|integer }} times ({{ row.get('impression_delta')|signed_integer }})
 {% else %}
-- No material query movers available.
+- No big search changes.
 {% endfor %}
 
-KEYWORD OPPORTUNITIES
+SEARCHES TO IMPROVE
 {% for row in gsc_opportunities %}
-- {{ row.get('query') }} [{{ row.get('type') }}]: {{ row.get('clicks')|integer }} clicks, {{ row.get('impressions')|integer }} impressions, {{ row.get('ctr')|percent }} CTR, position {{ row.get('position')|decimal(1) }}
+- {{ row.get('query') }}: {{ row.get('clicks')|integer }} clicks, seen {{ row.get('impressions')|integer }} times, rank {{ row.get('position')|decimal(1) }}
 {% else %}
-- No keyword opportunities met the reporting thresholds.
+- No search words need action now.
 {% endfor %}
 {% else %}
-Google Search Console data was not available for this edition.
+Google search data is not ready this week.
 {% endif %}
 
-READ WITH CONTEXT
+GOOD TO KNOW
 {% for item in report_caveats %}
 - {{ item }}
 {% endfor %}
-{% for item in data_quality.get('notes', [])[:3] %}
-- {{ item }}
-{% endfor %}
 {% if not narrative.generated_by_ai %}
-- AI commentary was unavailable or disabled; the narrative was generated deterministically from verified aggregate metrics.
+- AI was off, so the quick view came from the report totals.
 {% endif %}
 
-Internal business pulse. Sales totals cover complete Saturday–Friday calendar days.
-No customer-level data is included.
+Private business update. Sales weeks run Saturday to Friday.
+No customer details are included.

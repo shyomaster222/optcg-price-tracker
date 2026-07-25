@@ -124,15 +124,15 @@ def render_sales_chart(snapshot: Mapping[str, Any] | None) -> bytes:
     currency = str(source.get("currency") or "USD")
 
     image, draw = _canvas()
-    draw.text((24, 20), "Eight-week net collected", font=TITLE_FONT, fill=INK)
+    draw.text((24, 20), "Sales by week", font=TITLE_FONT, fill=INK)
     draw.text(
         (24, 49),
-        f"Completed Saturday–Friday windows · {currency}",
+        f"Last 8 full weeks · {currency}",
         font=SUBTITLE_FONT,
         fill=MUTED,
     )
     if not trend:
-        _empty_state(draw, "No weekly sales history available")
+        _empty_state(draw, "No weekly sales yet")
         return _png(image)
 
     left, top, right, bottom = 58, 78, WIDTH - 24, HEIGHT - 38
@@ -192,7 +192,9 @@ def render_sales_chart(snapshot: Mapping[str, Any] | None) -> bytes:
 def render_acquisition_chart(snapshot: Mapping[str, Any] | None) -> bytes:
     """Render the attributed online-store acquisition mix."""
 
-    acquisition = _mapping(_mapping(snapshot).get("acquisition"))
+    source = _mapping(snapshot)
+    acquisition = _mapping(source.get("acquisition"))
+    analysis_window = _mapping(source.get("analysis_window"))
     raw_items = acquisition.get("items")
     items = list(raw_items) if isinstance(raw_items, (list, tuple)) else []
     items = items[:5]
@@ -201,19 +203,18 @@ def render_acquisition_chart(snapshot: Mapping[str, Any] | None) -> bytes:
     use_sales = total_sales > 0
     denominator = total_sales if use_sales else total_orders
     coverage = _number(acquisition.get("order_coverage"), -1)
-    confidence = str(acquisition.get("confidence") or "unknown").title()
 
     image, draw = _canvas()
-    draw.text((24, 20), "Acquisition mix", font=TITLE_FONT, fill=INK)
-    coverage_text = f"{coverage:.0%} order coverage" if coverage >= 0 else "coverage unavailable"
+    draw.text((24, 20), "Where sales came from", font=TITLE_FONT, fill=INK)
+    coverage_text = f"source found for {coverage:.0%}" if coverage >= 0 else "source not known"
     draw.text(
         (24, 49),
-        f"Online-store first touch · {coverage_text} · {confidence} confidence",
+        f"{analysis_window.get('label', 'Last 90 days')} · {coverage_text} of online orders",
         font=SUBTITLE_FONT,
         fill=MUTED,
     )
     if not items or denominator <= 0:
-        _empty_state(draw, "No attributed acquisition mix available")
+        _empty_state(draw, "No source data for this period")
         return _png(image)
 
     label_x, bar_left, bar_right = 24, 190, WIDTH - 68
@@ -275,16 +276,17 @@ def render_countries_stock_chart(snapshot: Mapping[str, Any] | None) -> bytes:
     action_items = stock.get("action_items") or []
 
     image, draw = _canvas()
-    draw.text((24, 20), "Markets & inventory", font=TITLE_FONT, fill=INK)
+    analysis_window = _mapping(source.get("analysis_window"))
+    draw.text((24, 20), "Countries and stock", font=TITLE_FONT, fill=INK)
     draw.text(
         (24, 49),
-        "Current-week destination mix and active catalog health",
+        f"Countries: {analysis_window.get('label', 'Last 90 days')} · Stock: today",
         font=SUBTITLE_FONT,
         fill=MUTED,
     )
     draw.line((318, 74, 318, HEIGHT - 24), fill=GRID, width=1)
 
-    draw.text((24, 76), "Leading countries", font=LABEL_BOLD_FONT, fill=INK)
+    draw.text((24, 76), "Top countries", font=LABEL_BOLD_FONT, fill=INK)
     if country_rows and country_total > 0:
         top = 102
         for index, raw_row in enumerate(country_rows):
@@ -315,17 +317,17 @@ def render_countries_stock_chart(snapshot: Mapping[str, Any] | None) -> bytes:
     else:
         draw.text(
             (24, 111),
-            "No country mix available",
+            "No country sales for this period",
             font=SUBTITLE_FONT,
             fill=MUTED,
         )
 
-    draw.text((342, 76), "Inventory snapshot", font=LABEL_BOLD_FONT, fill=INK)
+    draw.text((342, 76), "Stock now", font=LABEL_BOLD_FONT, fill=INK)
     metrics = (
-        ("Sellable", int(_number(stock.get("sellable_units"))), NAVY),
-        ("Active SKUs", int(_number(stock.get("active_skus"))), BLUE),
+        ("Ready to sell", int(_number(stock.get("sellable_units"))), NAVY),
+        ("Stock items", int(_number(stock.get("active_skus"))), BLUE),
         ("Out of stock", int(_number(stock.get("out_of_stock_skus"))), RED),
-        ("Actions", len(action_items), GOLD),
+        ("Needs a check", len(action_items), GOLD),
     )
     for index, (label, value, color) in enumerate(metrics):
         column = index % 2

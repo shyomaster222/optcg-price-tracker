@@ -105,6 +105,15 @@ def test_default_report_date_changes_after_hong_kong_friday_is_complete():
     assert at_boundary.report_date.isoformat() == "2026-07-24"
     assert at_boundary.current_start.isoformat() == "2026-07-18T00:00:00+08:00"
     assert at_boundary.current_end.isoformat() == "2026-07-25T00:00:00+08:00"
+    assert at_boundary.year_start.isoformat() == "2026-01-01T00:00:00+08:00"
+    assert at_boundary.analysis_start.isoformat() == "2026-04-26T00:00:00+08:00"
+    assert at_boundary.previous_full_month_start.isoformat() == (
+        "2026-05-01T00:00:00+08:00"
+    )
+    assert at_boundary.previous_full_month_end.isoformat() == (
+        "2026-06-01T00:00:00+08:00"
+    )
+    assert at_boundary.fetch_start == at_boundary.year_start
 
 
 def test_report_window_clamps_prior_month_match_to_shorter_month():
@@ -289,6 +298,72 @@ def test_first_touch_blog_order_contributes_to_acquisition_and_landing_metrics()
     assert result["acquisition"]["order_coverage"] == 1.0
 
 
+def test_wider_metrics_use_90_days_and_sales_headlines_use_ytd_and_months():
+    first_visit = {
+        "landingPage": "https://rarecardsjapan.com/blogs/news/guide",
+        "referrerUrl": "https://www.google.com/search?q=one+piece",
+        "source": "Google",
+        "sourceType": "seo",
+    }
+    orders = [
+        _order(
+            "2025-12-31T12:00:00+08:00",
+            order_id="prior-year",
+            net=900,
+            lines=[_line("old", 1)],
+        ),
+        _order(
+            "2026-06-15T12:00:00+08:00",
+            order_id="analysis-order",
+            net=100,
+            shipping_country="US",
+            lines=[_line("op-analysis", 2)],
+            journey={"ready": True, "firstVisit": first_visit},
+        ),
+        _order(
+            "2026-07-15T12:00:00+08:00",
+            order_id="last-month",
+            net=200,
+            shipping_country="GB",
+            lines=[_line("op-july", 1)],
+        ),
+    ]
+
+    result = summarize_shopify(orders, [], build_report_window("2026-08-07"))
+
+    assert result["weekly"]["current"]["orders"] == 0
+    assert result["year_to_date"]["net_sales"] == 300.0
+    assert result["year_to_date"]["orders"] == 2
+    assert result["analysis_window"] == {
+        "label": "Last 90 days",
+        "days": 90,
+        "start": "2026-05-10",
+        "end": "2026-08-07",
+        "orders": 2,
+    }
+    assert result["channels"]["items"][0]["net_sales"] == 300.0
+    assert "Organic Search" in {
+        row["label"] for row in result["acquisition"]["items"]
+    }
+    assert "Blog" in {row["label"] for row in result["landing_pages"]["types"]}
+    assert {row["label"] for row in result["countries"]["items"]} == {
+        "United States",
+        "United Kingdom",
+    }
+    assert {row["sku"] for row in result["products"]["items"]} == {
+        "op-analysis",
+        "op-july",
+    }
+    last_month = result["monthly"]["last_full_month"]
+    assert last_month["net_sales"] == 200.0
+    assert last_month["comparison"]["net_sales"] == {
+        "previous": 100.0,
+        "absolute": 100.0,
+        "percent": 1.0,
+    }
+    assert result["monthly"]["previous_full_month"]["net_sales"] == 100.0
+
+
 def test_countries_prefer_shipping_then_billing_and_roll_tail_into_other():
     orders = [
         _order("2026-08-01T00:00:00Z", net=70, shipping_country="US"),
@@ -313,11 +388,11 @@ def test_countries_prefer_shipping_then_billing_and_roll_tail_into_other():
     rows = _countries(orders)["items"]
 
     assert [row["label"] for row in rows] == [
-        "US",
-        "JP",
-        "GB",
-        "CA",
-        "AU",
+        "United States",
+        "Japan",
+        "United Kingdom",
+        "Canada",
+        "Australia",
         "Other",
     ]
     assert rows[-1]["orders"] == 2
@@ -369,14 +444,14 @@ def test_stock_actions_enforce_velocity_and_cover_thresholds():
     result = _stock([sale], [sale], catalog)
     actions = {row["variant_id"]: row for row in result["action_items"]}
 
-    assert actions["stockout"]["action"] == "Stockout"
-    assert actions["reorder"]["action"] == "Reorder review"
+    assert actions["stockout"]["action"] == "Restock"
+    assert actions["reorder"]["action"] == "Order soon"
     assert actions["reorder"]["weeks_cover"] == 1.5
-    assert actions["slow"]["action"] == "Slow-stock review"
+    assert actions["slow"]["action"] == "Selling slowly"
     assert actions["promote"]["action"] == "Promote"
     assert actions["promote"]["weeks_cover"] == 16.0
-    assert actions["continue-selling"]["action"] == "Inventory review"
-    assert actions["untracked"]["action"] == "Inventory review"
+    assert actions["continue-selling"]["action"] == "Check stock"
+    assert actions["untracked"]["action"] == "Check stock"
 
     # The thresholds are strict: exactly two or twelve weeks remains healthy.
     assert "cover-two" not in actions

@@ -25,6 +25,10 @@ class ReportWindow:
     prior_month_matched_end: datetime
     last_full_month_start: datetime
     last_full_month_end: datetime
+    previous_full_month_start: datetime
+    previous_full_month_end: datetime
+    year_start: datetime
+    analysis_start: datetime
     velocity_start: datetime
     slow_stock_start: datetime
     fetch_start: datetime
@@ -102,14 +106,25 @@ def build_report_window(
         prior_start + timedelta(days=elapsed_days),
         next_month_after_prior,
     )
+    previous_full_month_start = _previous_month_start(prior_start)
+    year_start = final_included_at.replace(
+        month=1,
+        day=1,
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
 
     velocity_start = current_end - timedelta(days=28)
-    slow_stock_start = current_end - timedelta(days=90)
+    analysis_start = current_end - timedelta(days=90)
+    slow_stock_start = analysis_start
     fetch_start = min(
+        year_start,
         trend_start,
-        prior_start,
+        previous_full_month_start,
         velocity_start,
-        slow_stock_start,
+        analysis_start,
     )
 
     return ReportWindow(
@@ -127,6 +142,10 @@ def build_report_window(
         prior_month_matched_end=prior_matched_end,
         last_full_month_start=prior_start,
         last_full_month_end=month_start,
+        previous_full_month_start=previous_full_month_start,
+        previous_full_month_end=prior_start,
+        year_start=year_start,
+        analysis_start=analysis_start,
         velocity_start=velocity_start,
         slow_stock_start=slow_stock_start,
         fetch_start=fetch_start,

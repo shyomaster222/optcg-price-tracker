@@ -42,6 +42,29 @@ SOCIAL_HOST_MARKERS = (
 )
 EMAIL_MARKERS = ("email", "newsletter", "klaviyo", "mailchimp", "omnisend", "sms")
 PAID_MARKERS = ("cpc", "ppc", "paid", "paid_search", "paid-social", "paid_social")
+COUNTRY_NAMES = {
+    "AU": "Australia",
+    "CA": "Canada",
+    "CN": "China",
+    "DE": "Germany",
+    "ES": "Spain",
+    "FR": "France",
+    "GB": "United Kingdom",
+    "HK": "Hong Kong",
+    "ID": "Indonesia",
+    "IT": "Italy",
+    "JP": "Japan",
+    "KR": "South Korea",
+    "MY": "Malaysia",
+    "NL": "Netherlands",
+    "NZ": "New Zealand",
+    "PH": "Philippines",
+    "SG": "Singapore",
+    "TH": "Thailand",
+    "TW": "Taiwan",
+    "US": "United States",
+    "VN": "Vietnam",
+}
 
 
 def _decimal(value) -> Decimal:
@@ -323,7 +346,8 @@ def _countries(orders: list[dict]) -> dict:
     def country(order: dict) -> str:
         shipping = order.get("shippingAddress") or {}
         billing = order.get("billingAddress") or {}
-        return shipping.get("countryCodeV2") or billing.get("countryCodeV2") or "Unknown"
+        code = shipping.get("countryCodeV2") or billing.get("countryCodeV2")
+        return COUNTRY_NAMES.get(str(code or "").upper(), code or "Unknown")
 
     rows = _aggregate_orders(orders, country)
     top, remainder = rows[:5], rows[5:]
@@ -447,11 +471,11 @@ def _stock(
     sales_90 = _product_sales(orders_90d)
     items = []
     action_order = {
-        "Stockout": 0,
-        "Reorder review": 1,
-        "Slow-stock review": 2,
+        "Restock": 0,
+        "Order soon": 1,
+        "Selling slowly": 2,
         "Promote": 3,
-        "Inventory review": 4,
+        "Check stock": 4,
         "Healthy": 5,
     }
     for variant in _catalog_variants(catalog):
@@ -467,13 +491,13 @@ def _stock(
             else None
         )
         if not tracked:
-            action = "Inventory review"
+            action = "Check stock"
         elif inventory <= 0 and units_90 > 0:
-            action = "Stockout"
+            action = "Restock"
         elif units_28 >= 2 and weeks_cover is not None and weeks_cover < 2:
-            action = "Reorder review"
+            action = "Order soon"
         elif inventory > 0 and units_90 == 0:
-            action = "Slow-stock review"
+            action = "Selling slowly"
         elif weeks_cover is not None and weeks_cover > 12:
             action = "Promote"
         else:
@@ -493,7 +517,7 @@ def _stock(
             action_order[row["action"]],
             -(
                 row["units_28d"]
-                if row["action"] in {"Stockout", "Reorder review"}
+                if row["action"] in {"Restock", "Order soon"}
                 else (row["inventory"] or 0)
             ),
             row["title"],
@@ -554,12 +578,28 @@ def summarize_shopify(
         window.last_full_month_end,
         tz,
     )
+    previous_full_month_orders = _orders_in(
+        order_list,
+        window.previous_full_month_start,
+        window.previous_full_month_end,
+        tz,
+    )
+    year_orders = _orders_in(order_list, window.year_start, window.current_end, tz)
+    analysis_orders = _orders_in(
+        order_list,
+        window.analysis_start,
+        window.current_end,
+        tz,
+    )
 
     normalized_b2b = {tag.strip().lower() for tag in b2b_tags if tag.strip()}
-    channels = _aggregate_orders(current_orders, lambda order: sales_channel(order, normalized_b2b))
+    channels = _aggregate_orders(
+        analysis_orders,
+        lambda order: sales_channel(order, normalized_b2b),
+    )
     online_orders = [
         order
-        for order in current_orders
+        for order in analysis_orders
         if _is_eligible(order)
         and sales_channel(order, normalized_b2b) == "Online Store"
         and _net_payment(order) > ZERO
@@ -570,11 +610,11 @@ def summarize_shopify(
     covered_revenue = sum((_net_payment(order) for order in covered), ZERO)
 
     orders_28d = _orders_in(order_list, window.velocity_start, window.current_end, tz)
-    orders_90d = _orders_in(order_list, window.slow_stock_start, window.current_end, tz)
+    orders_90d = analysis_orders
     currencies = sorted(
         {
             currency
-            for order in current_orders
+            for order in order_list
             for _, currency in [_money_bag(order.get("netPaymentSet"))]
             if currency
         }
@@ -583,6 +623,14 @@ def summarize_shopify(
     return {
         "window": window.to_dict(),
         "currency": currencies[0] if len(currencies) == 1 else (",".join(currencies) or "USD"),
+        "year_to_date": _period_metrics(year_orders),
+        "analysis_window": {
+            "label": "Last 90 days",
+            "days": 90,
+            "start": window.analysis_start.date().isoformat(),
+            "end": window.report_date.isoformat(),
+            "orders": _period_metrics(analysis_orders)["orders"],
+        },
         "weekly": {
             "current": _with_comparison(current, previous),
             "previous": previous,
@@ -594,7 +642,11 @@ def summarize_shopify(
                 _period_metrics(prior_matched_orders),
             ),
             "prior_month_matched": _period_metrics(prior_matched_orders),
-            "last_full_month": _period_metrics(last_month_orders),
+            "last_full_month": _with_comparison(
+                _period_metrics(last_month_orders),
+                _period_metrics(previous_full_month_orders),
+            ),
+            "previous_full_month": _period_metrics(previous_full_month_orders),
         },
         "trend": trend,
         "channels": {"items": channels},
@@ -612,20 +664,20 @@ def summarize_shopify(
                 else "low"
             ),
         },
-        "landing_pages": _landing_assists(current_orders),
-        "countries": _countries(current_orders),
-        "products": _products(current_orders, previous_orders),
+        "landing_pages": _landing_assists(analysis_orders),
+        "countries": _countries(analysis_orders),
+        "products": _products(analysis_orders, []),
         "stock": _stock(orders_28d, orders_90d, catalog),
         "data_quality": {
             "orders_fetched": len(order_list),
             "current_period_records": len(current_orders),
+            "analysis_period_records": len(analysis_orders),
             "shop_currencies": currencies,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "notes": [
-                "Net collected uses Shopify shop-money payments less refunds and is allocated to each order's processed date.",
-                "Refund totals are lifetime-to-date refunds on orders processed in the window, not refunds issued during the window.",
-                "Product line sales are discounted merchandise values and do not reconcile to collected sales.",
-                "Acquisition is Shopify first-touch evidence, not proof of causation.",
+                "Sales collected means payments for orders processed in the period.",
+                "Refunds shown are linked to these orders and may have happened later.",
+                "The first known visit may not tell the full story.",
             ],
         },
     }

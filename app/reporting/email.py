@@ -138,6 +138,11 @@ def _integer(value: Any) -> str:
     return f"{int(round(number)):,}" if number is not None else "n/a"
 
 
+def _plural(value: Any, singular: str, plural: str | None = None) -> str:
+    number = _number(value)
+    return singular if number == 1 else (plural or f"{singular}s")
+
+
 def _signed_integer(value: Any) -> str:
     number = _number(value)
     if number is None:
@@ -187,6 +192,7 @@ _JINJA.filters.update(
     money=_money,
     percent=_percent,
     integer=_integer,
+    plural=_plural,
     signed_integer=_signed_integer,
     decimal=_decimal,
     signed_decimal=_signed_decimal,
@@ -202,7 +208,7 @@ def _normalise_narrative(
         return value
     if isinstance(value, Mapping):
         return NarrativeResult(
-            headline=str(value.get("headline") or "Weekly business pulse"),
+            headline=str(value.get("headline") or "Sales update"),
             executive_summary=str(
                 value.get("executive_summary")
                 or value.get("summary")
@@ -231,7 +237,7 @@ def _normalise_narrative(
         )
     if value is not None and hasattr(value, "executive_summary"):
         return NarrativeResult(
-            headline=str(getattr(value, "headline", "Weekly business pulse")),
+            headline=str(getattr(value, "headline", "Sales update")),
             executive_summary=str(getattr(value, "executive_summary")),
             highlights=tuple(getattr(value, "highlights", ()) or ()),
             actions=tuple(getattr(value, "actions", ()) or ()),
@@ -296,15 +302,21 @@ def _gsc_row(value: Any, *, kind: str) -> dict[str, Any]:
     if kind == "mover":
         click_delta = result["click_delta"]
         if click_delta is not None and click_delta > 0:
-            result["type"] = "Click gainer"
+            result["type"] = "More clicks"
         elif click_delta is not None and click_delta < 0:
-            result["type"] = "Click decline"
+            result["type"] = "Fewer clicks"
         else:
-            result["type"] = "Flat"
+            result["type"] = "No change"
     elif kind == "opportunity":
-        result["type"] = _safe_dimension(source.get("type") or "Opportunity", limit=60)
+        raw_type = _safe_dimension(source.get("type") or "", limit=60).lower()
+        if "ctr" in raw_type or "click" in raw_type:
+            result["type"] = "Low click rate"
+        elif "striking" in raw_type or "position" in raw_type:
+            result["type"] = "Close to top results"
+        else:
+            result["type"] = "Worth checking"
     else:
-        result["type"] = "Top query"
+        result["type"] = "Top search"
     return result
 
 
@@ -379,6 +391,8 @@ def _view(
     weekly = _mapping(snapshot.get("weekly"))
     current = _mapping(weekly.get("current"))
     monthly = _mapping(snapshot.get("monthly"))
+    year_to_date = _mapping(snapshot.get("year_to_date"))
+    analysis_window = _mapping(snapshot.get("analysis_window"))
     acquisition = _mapping(snapshot.get("acquisition"))
     stock = _mapping(snapshot.get("stock"))
     window = _mapping(snapshot.get("window"))
@@ -394,23 +408,20 @@ def _view(
         ),
         {"label": "Blog", "orders": 0, "net_sales": 0, "share": 0},
     )
-    report_caveats = [str(item) for item in narrative.caveats]
-    if not any(
-        "net collected" in item.lower() and "accounting net sales" in item.lower()
-        for item in report_caveats
-    ):
-        report_caveats.append(
-            "Net collected revenue is payments on orders processed in-window; "
-            "it is not Shopify accounting net sales."
-        )
-    if not any(
-        "refund" in item.lower() and "lifetime-to-date" in item.lower()
-        for item in report_caveats
-    ):
-        report_caveats.append(
-            "Refund totals are lifetime-to-date amounts attached to those orders, "
-            "not refunds issued during the week."
-        )
+    report_caveats = [
+        (
+            "Sales collected means payments for orders processed in the period. "
+            "It is not Shopify accounting net sales."
+        ),
+        (
+            "Refund totals include all refunds linked to these orders, "
+            "even if the refund happened later."
+        ),
+        (
+            "The first known visit shows where an order started. "
+            "It does not prove what caused the sale."
+        ),
+    ]
     report_date = window.get("report_date") or window.get("current_end") or ""
     return {
         "currency": str(snapshot.get("currency") or "USD"),
@@ -418,6 +429,8 @@ def _view(
         "report_date": report_date,
         "weekly": weekly,
         "current": current,
+        "year_to_date": year_to_date,
+        "analysis_window": analysis_window,
         "sales_change": _metric_change(current, "net_sales"),
         "orders_change": _metric_change(current, "orders"),
         "aov_change": _metric_change(current, "aov"),
@@ -475,9 +488,9 @@ def render_weekly_email(
     partial = _normalise_partial_sources(partial_sources)
     context = _view(source, narrative, partial)
     date_text = _display_date(context["report_date"])
-    subject = f"RCJ weekly business pulse — {date_text}"
+    subject = f"RCJ sales update — {date_text}"
     if partial:
-        subject = f"RCJ weekly business pulse (partial) — {date_text}"
+        subject = f"RCJ sales update (partial) — {date_text}"
 
     html = _JINJA.get_template("email/weekly_report.html").render(**context)
     text = _JINJA.get_template("email/weekly_report.txt").render(**context)
