@@ -281,9 +281,9 @@ def acquisition_source(order: dict) -> str:
     if _is_self_referral(host):
         return "Direct"
     if host:
-        return "Other website referrals"
+        return "Other websites"
     if medium == "referral" or source_type == "referral":
-        return "Other website referrals"
+        return "Other websites"
     if source in {"direct", "", "none"} and not signals["referrer"]:
         return "Direct"
     return "Unknown"
@@ -302,7 +302,7 @@ def sales_channel(order: dict, b2b_tags: set[str]) -> str:
     source = str(order.get("sourceName") or "").lower().replace("-", "_")
     app_name = _app_name(order)
     if source in {"shopify_draft_order", "draft_order"} or "draft" in app_name:
-        return "Draft / Manual"
+        return "Draft / Manual (B2B)"
     if source == "web" or "online store" in app_name:
         return "Online Store"
     if source in {"shop", "3890849"} or app_name == "shop":

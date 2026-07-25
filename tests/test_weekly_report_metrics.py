@@ -236,11 +236,11 @@ def test_weekly_metrics_apply_half_open_boundaries_and_order_exclusions():
                 "sourceName": "web",
                 "app": {"name": "Draft Orders"},
             },
-            "Draft / Manual",
+            "Draft / Manual (B2B)",
         ),
         (
             {"tags": [], "sourceName": "draft-order", "app": {"name": "Shop"}},
-            "Draft / Manual",
+            "Draft / Manual (B2B)",
         ),
         (
             {"tags": [], "sourceName": "web", "app": {"name": "Online Store"}},
@@ -341,14 +341,14 @@ def test_first_touch_blog_order_contributes_to_acquisition_and_landing_metrics()
                 "referrerUrl": "https://shopify.com/",
                 "source": "https://shopify.com/",
             },
-            "Other website referrals",
+            "Other websites",
         ),
         (
             {
                 "landingPage": "https://rarecardsjapan.com/products/op14",
                 "referrerUrl": "https://notrarecardsjapan.com/reviews/op14",
             },
-            "Other website referrals",
+            "Other websites",
         ),
         (
             {
