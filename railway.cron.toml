@@ -1,11 +1,11 @@
-# Config for price-scraper cron service only.
+# Config for the daily scrape, RCJ price sync, and report service.
 # Set "Config file path" to /railway.cron.toml in Railway dashboard for this service.
 
 [build]
 builder = "nixpacks"
 
 [deploy]
-startCommand = "python scripts/run_scraper.py"
-cronSchedule = "0 0 * * *"
+startCommand = "python scripts/run_price_sync.py --refresh-prices --email"
+cronSchedule = "0 1 * * *"
 # No healthcheckPath - cron service doesn't serve HTTP
 restartPolicyType = "NEVER"
